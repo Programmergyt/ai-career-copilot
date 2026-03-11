@@ -4,6 +4,6 @@ __pycache__/
 
 .pytest_cache/
 
-.output/
+output/
 
-.data/
+data/
