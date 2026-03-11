@@ -1,0 +1,31 @@
+# AI Career Copilot 配置文件
+
+llm:
+  model: "deepseek-chat"
+  api_base: "https://api.deepseek.com"
+  temperature: 0.3
+  max_tokens: 4096
+
+embedding:
+  model: "text-embedding-v4"
+
+rerank:
+  model: "gte-rerank-v2"
+  top_n: 5
+
+rag:
+  chunk_size: 512
+  chunk_overlap: 50
+  search_top_k: 10
+  rerank_top_n: 5
+
+vector_store:
+  persist_directory: "./data/chroma_db"
+  collection_name: "personal_knowledge"
+
+output:
+  directory: "./output"
+
+templates:
+  default_md: "./templates/default.md"
+  default_tex: "./templates/default.tex"

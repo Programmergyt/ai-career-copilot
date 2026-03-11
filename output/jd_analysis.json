@@ -1,0 +1,64 @@
+{
+  "company_info": {
+    "industry": "企业软件、云计算、人工智能、数据分析",
+    "company_type": "外企（跨国科技公司）"
+  },
+  "position_title": "Generative AI Intern Developer (生成式AI实习开发工程师)",
+  "core_responsibilities": [
+    "探索和应用生成式AI技术，解决现实世界的企业业务挑战。",
+    "与全球跨职能团队协作，在SAP生态系统内设计、原型开发和测试创新解决方案。",
+    "识别感兴趣的领域，产生创意，并通过开发经客户/合作伙伴验证的工作原型来产生切实影响。"
+  ],
+  "hard_requirements": {
+    "education": "正在攻读计算机科学或相关领域的全日制硕士学位",
+    "experience": "无明确工作年限要求（实习岗位）",
+    "required_skills": [
+      "熟悉主流编程语言（如Python, TypeScript/JavaScript, Java）",
+      "掌握AI辅助开发工作流（如Claude Code, Codex）以加速原型开发、重构和调试",
+      "具备生成式AI工程能力，包括构建LLM驱动的功能、高级RAG管道、Agentic工作流、MCP和Agent Skills",
+      "具备至少6个月的实习时间"
+    ]
+  },
+  "soft_requirements": [
+    "积极主动、坚持不懈、保持好奇心",
+    "结构化、有条理的工作风格，注重细节和质量",
+    "团队合作精神，适应国际化工作氛围",
+    "目标导向，动手能力强，能在敏捷环境中成长",
+    "优秀的英语沟通能力"
+  ],
+  "tech_stack": [
+    "Python",
+    "TypeScript/JavaScript",
+    "Java",
+    "Generative AI",
+    "Large Language Models (LLM)",
+    "Retrieval-Augmented Generation (RAG)",
+    "Agentic Workflows",
+    "MCP (Model Context Protocol)",
+    "Agent Skills",
+    "Machine Learning",
+    "Data Analytics"
+  ],
+  "ability_model": [
+    "创新能力与解决问题能力（解决企业业务挑战）",
+    "快速学习与应用能力（探索新技术并快速原型开发）",
+    "全球协作与沟通能力（跨职能、国际化团队）",
+    "实践与动手能力（开发可验证的工作原型）",
+    "主动性与自驱力（对有意义、创新的项目充满热情）"
+  ],
+  "keywords": [
+    "Generative AI",
+    "Internship",
+    "SAP CTO Office",
+    "Research & Innovation",
+    "Prototype",
+    "LLM",
+    "RAG",
+    "Agent",
+    "AI-Native",
+    "Enterprise Software",
+    "Global Collaboration",
+    "Hands-on",
+    "Agile"
+  ]
+}

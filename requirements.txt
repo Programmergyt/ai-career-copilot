@@ -1,0 +1,29 @@
+# AI Career Copilot — MVP 依赖
+# Python >= 3.10
+
+# LLM 调用
+openai>=1.0.0
+
+# LangChain / LangGraph 生态
+langchain>=0.3.0
+langchain-community>=0.3.0
+langgraph>=0.2.0
+
+# Embedding & Rerank（阿里云 DashScope）
+dashscope>=1.14.0
+
+# 向量数据库
+chromadb>=0.5.0
+
+# 文件解析
+pdfplumber>=0.10.0
+python-docx>=1.0.0
+
+# 配置
+pyyaml>=6.0
+
+# Web UI（第三期，先装好）
+streamlit>=1.30.0
+
+# 测试
+pytest>=8.0.0
