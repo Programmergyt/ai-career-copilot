@@ -4,7 +4,7 @@ import json
 from langgraph.graph import StateGraph, END
 
 from workflow.state import WorkflowState
-from tools.file_parser import parse_file
+from tools.file_parser import parse_file, parse_directory
 from rag.indexer import build_index
 from rag.retriever import retrieve
 from agents.jd_analyzer import analyze_jd
@@ -23,13 +23,26 @@ def node_parse_documents(state: WorkflowState) -> dict:
 
     texts, metas = [], []
     for fpath in state["personal_docs"]:
-        try:
-            text = parse_file(fpath)
-            texts.append(text)
-            metas.append({"source_file": fpath, "doc_type": "personal"})
-            logs.append(f"  ✓ 解析成功: {fpath}")
-        except Exception as e:
-            logs.append(f"  ✗ 解析失败: {fpath} — {e}")
+        from pathlib import Path
+        p = Path(fpath)
+        if p.is_dir():
+            # 递归解析目录下所有支持的文件
+            dir_results = parse_directory(fpath)
+            for sub_path, text in dir_results.items():
+                if text.startswith("[解析失败]"):
+                    logs.append(f"  ✗ 解析失败: {sub_path} — {text}")
+                else:
+                    texts.append(text)
+                    metas.append({"source_file": sub_path, "doc_type": "personal"})
+                    logs.append(f"  ✓ 解析成功: {sub_path}")
+        else:
+            try:
+                text = parse_file(fpath)
+                texts.append(text)
+                metas.append({"source_file": fpath, "doc_type": "personal"})
+                logs.append(f"  ✓ 解析成功: {fpath}")
+            except Exception as e:
+                logs.append(f"  ✗ 解析失败: {fpath} — {e}")
 
     if texts:
         try:

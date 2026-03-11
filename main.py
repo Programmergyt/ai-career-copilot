@@ -64,7 +64,7 @@ def main():
     print("🚀 AI Career Copilot — MVP Pipeline")
     print(f"{'='*60}")
     print(f"JD 长度: {len(jd_text)} 字符")
-    print(f"个人材料: {len(valid_docs)} 份文件")
+    print(f"个人材料: {len(valid_docs)} 个路径（文件/文件夹）")
     print(f"{'='*60}\n")
 
     # 运行 Pipeline
