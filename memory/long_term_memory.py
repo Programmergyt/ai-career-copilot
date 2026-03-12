@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -17,9 +18,15 @@ def _get_conn(db_path: str | None = None) -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str | None = None) -> None:
+def init_db(db_path: str | None = None, reset: bool = False) -> None:
     """初始化长期记忆数据库表结构。"""
-    conn = _get_conn(db_path)
+    path = db_path or DB_PATH
+
+    # 如果需要重置数据库
+    if reset and os.path.exists(path):
+        os.remove(path)
+
+    conn = _get_conn(path)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS jd_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

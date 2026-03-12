@@ -44,6 +44,7 @@ def generate_resume(
     jd_analysis: dict,
     personal_context: str | None = None,
     persist_directory: str | None = None,
+    profile: dict | None = None,
 ) -> str:
     """根据 JD 分析结果生成简历 Markdown 内容。
 
@@ -51,6 +52,7 @@ def generate_resume(
         jd_analysis: JD 分析结果字典
         personal_context: 个人材料文本（如已有）；为 None 时自动 RAG 检索
         persist_directory: 向量库路径
+        profile: 提取的个人基本信息字典
 
     Returns:
         简历 Markdown 文本
@@ -75,9 +77,11 @@ def generate_resume(
             personal_context = "（个人知识库为空或检索失败，请补充个人材料）"
 
     client, model = _get_llm_client()
+    profile_text = json.dumps(profile, ensure_ascii=False, indent=2) if profile else "（未提取到个人基本信息，请从材料中推断或标注 TODO）"
     prompt = RESUME_GENERATION_USER.format(
         jd_analysis=json.dumps(jd_analysis, ensure_ascii=False, indent=2),
         personal_context=personal_context,
+        profile=profile_text,
     )
     resume_md = _call_llm(client, model, RESUME_GENERATION_SYSTEM, prompt)
     return resume_md

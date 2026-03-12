@@ -36,8 +36,8 @@ def main():
 
     args = parser.parse_args()
 
-    # 初始化长期记忆数据库
-    init_db()
+    # 初始化长期记忆数据库，重置以清空历史记录，实际运行时可去掉 reset=True
+    init_db(None, reset=True)
 
     # 解析 JD：如果是文件路径则读取文件内容，否则视为直接文本
     jd_path = Path(args.jd)
