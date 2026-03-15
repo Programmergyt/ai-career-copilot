@@ -3,14 +3,17 @@
 llm:
   model: "deepseek-chat"
   api_base: "https://api.deepseek.com"
+  api_key_env: "DEEPSEEK_API_KEY"        # 环境变量中的 API Key 名称
   temperature: 0.3
   max_tokens: 4096
 
 embedding:
   model: "text-embedding-v4"
+  api_key_env: "DASHSCOPE_API_KEY"        # 环境变量中的 API Key 名称
 
 rerank:
   model: "gte-rerank-v2"
+  api_key_env: "DASHSCOPE_API_KEY"        # 环境变量中的 API Key 名称
   top_n: 5
 
 rag:
@@ -21,7 +24,6 @@ rag:
 
 vector_store:
   persist_directory: "./data/chroma_db"
-  collection_name: "personal_knowledge"
 
 output:
   directory: "./output"

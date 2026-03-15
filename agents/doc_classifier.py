@@ -1,7 +1,6 @@
 """文档分类与个人信息提取 Agent — 使用 LLM 对文档进行分类并提取个人基本信息"""
 
 import json
-import os
 from openai import OpenAI
 
 from prompts.doc_classification import (
@@ -10,26 +9,28 @@ from prompts.doc_classification import (
     PROFILE_EXTRACTION_SYSTEM,
     PROFILE_EXTRACTION_USER,
 )
+from config_loader import get_llm_config
 
 
 def _get_llm_client() -> tuple[OpenAI, str]:
-    model = os.getenv("LLM_MODEL", "deepseek-chat")
+    cfg = get_llm_config()
     client = OpenAI(
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
-        base_url=os.getenv("LLM_API_BASE", "https://api.deepseek.com"),
+        api_key=cfg["api_key"],
+        base_url=cfg["api_base"],
     )
-    return client, model
+    return client, cfg["model"]
 
 
 def _call_llm(client: OpenAI, model: str, system: str, user: str) -> str:
+    cfg = get_llm_config()
     resp = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        temperature=0.3,
-        max_tokens=4096,
+        temperature=cfg["temperature"],
+        max_tokens=cfg["max_tokens"],
     )
     return resp.choices[0].message.content.strip()
 

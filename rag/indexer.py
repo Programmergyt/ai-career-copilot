@@ -1,11 +1,11 @@
 """文档入库 — 将文本分块后写入 ChromaDB 向量数据库"""
 
 import hashlib
-import os
 from langchain_text_splitters  import RecursiveCharacterTextSplitter,MarkdownHeaderTextSplitter
 from langchain_community.vectorstores import Chroma
 
 from rag.embeddings import get_embedding_model
+from config_loader import get_vector_store_config, get_rag_config
 
 
 def build_index(
@@ -13,8 +13,8 @@ def build_index(
     metadatas: list[dict] | None = None,
     collection_name: str = "personal_knowledge",
     persist_directory: str | None = None,
-    chunk_size: int = 1024,
-    chunk_overlap: int = 100,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ):
     """
     构建向量索引（RAG indexer）
@@ -27,7 +27,13 @@ def build_index(
     5. 写入 ChromaDB
     """
     if persist_directory is None:
-        persist_directory = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
+        persist_directory = get_vector_store_config()["persist_directory"]
+
+    rag_cfg = get_rag_config()
+    if chunk_size is None:
+        chunk_size = rag_cfg.get("chunk_size", 512)
+    if chunk_overlap is None:
+        chunk_overlap = rag_cfg.get("chunk_overlap", 50)
 
     # Markdown header splitter
     headers = [

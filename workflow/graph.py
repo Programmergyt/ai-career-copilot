@@ -10,7 +10,7 @@ from rag.retriever import retrieve
 from agents.jd_analyzer import analyze_jd
 from agents.resume_writer import generate_resume, self_check_resume
 from agents.doc_classifier import classify_documents, extract_profile
-from tools.template_renderer import save_output
+from tools.template_renderer import save_output, render_resume
 
 
 # ============================================================
@@ -249,7 +249,7 @@ def _build_section_context(matched_sections: dict) -> dict[str, str]:
 
 
 def node_generate_resume(state: WorkflowState) -> dict:
-    """简历生成节点。根据 JD 分析、按类型 RAG 检索结果和个人基本信息生成简历草稿。"""
+    """简历生成节点。根据 JD 分析、按类型 RAG 检索结果和个人基本信息生成结构化简历数据，再通过模板渲染。"""
     logs = list(state.get("analysis_log") or [])
     logs.append("[7/8] 生成定制化简历...")
 
@@ -259,13 +259,25 @@ def node_generate_resume(state: WorkflowState) -> dict:
     profile = state.get("profile")
 
     try:
-        resume_md = generate_resume(
+        # 1. LLM 生成结构化简历数据（JSON dict）
+        resume_data = generate_resume(
             jd_analysis=jd_analysis,
             section_contexts=section_contexts,
             profile=profile,
         )
-        logs.append("  ✓ 简历草稿生成完成")
+        logs.append("  ✓ 简历结构化数据生成完成")
+
+        # 2. 通过模板渲染为 Markdown
+        template_path = state.get("template_path", "./templates/default.md")
+        if "_raw_markdown" in resume_data:
+            # 旧路径兼容：直接使用原始 Markdown
+            resume_md = resume_data["_raw_markdown"]
+        else:
+            resume_md = render_resume(template_path, resume_data)
+        logs.append("  ✓ 模板渲染完成")
+
         return {
+            "resume_data": resume_data,
             "resume_draft": resume_md,
             "current_step": "generate_resume",
             "analysis_log": logs,
@@ -319,6 +331,13 @@ def node_save_output(state: WorkflowState) -> dict:
     # 保存简历 Markdown
     resume_path = save_output(resume_content, "./output/resume.md")
     logs.append(f"[输出] 简历已保存: {resume_path}")
+
+    # 保存简历结构化数据（JSON）
+    resume_data = state.get("resume_data")
+    if resume_data and "_raw_markdown" not in resume_data:
+        resume_json = json.dumps(resume_data, ensure_ascii=False, indent=2)
+        json_path = save_output(resume_json, "./output/resume_data.json")
+        logs.append(f"[输出] 简历结构化数据已保存: {json_path}")
 
     # 保存 JD 分析报告
     jd_analysis = state.get("jd_analysis")
@@ -404,6 +423,7 @@ def run_pipeline(
         "profile": None,
         "jd_analysis": None,
         "matched_sections": None,
+        "resume_data": None,
         "resume_draft": None,
         "resume_final": None,
         "resume_file": None,

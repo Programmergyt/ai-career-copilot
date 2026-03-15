@@ -1,10 +1,10 @@
 """RAG 检索模块 — 向量检索 + Rerank"""
 
-import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_compressors.dashscope_rerank import DashScopeRerank
 
 from rag.embeddings import get_embedding_model
+from config_loader import get_rerank_config, get_vector_store_config
 
 
 def get_vectorstore(
@@ -13,7 +13,7 @@ def get_vectorstore(
 ) -> Chroma:
     """获取已有的 Chroma 向量库实例。"""
     if persist_directory is None:
-        persist_directory = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
+        persist_directory = get_vector_store_config()["persist_directory"]
     return Chroma(
         collection_name=collection_name,
         embedding_function=get_embedding_model(),
@@ -45,9 +45,11 @@ def retrieve(
 
     # 第二步：Rerank
     try:
-        reranker = DashScopeRerank(
-            model=os.getenv("RERANK_MODEL", "gte-rerank-v2"),
-        )
+        rerank_cfg = get_rerank_config()
+        rerank_kwargs = {"model": rerank_cfg["model"]}
+        if rerank_cfg["api_key"]:
+            rerank_kwargs["dashscope_api_key"] = rerank_cfg["api_key"]
+        reranker = DashScopeRerank(**rerank_kwargs)
         rerank_results = reranker.rerank(
             documents=documents,
             query=query,

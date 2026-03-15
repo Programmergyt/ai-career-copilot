@@ -1,7 +1,6 @@
-"""简历生成 Agent — 根据 JD 分析 + 个人材料生成定制化简历"""
+"""简历生成 Agent — 根据 JD 分析 + 个人材料生成结构化简历数据（JSON）"""
 
 import json
-import os
 from openai import OpenAI
 
 from prompts.resume_generation import (
@@ -12,26 +11,28 @@ from prompts.resume_generation import (
 )
 from prompts.self_check import SELF_CHECK_SYSTEM, SELF_CHECK_USER
 from rag.retriever import retrieve
+from config_loader import get_llm_config
 
 
 def _get_llm_client() -> tuple[OpenAI, str]:
-    model = os.getenv("LLM_MODEL", "deepseek-chat")
+    cfg = get_llm_config()
     client = OpenAI(
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
-        base_url=os.getenv("LLM_API_BASE", "https://api.deepseek.com"),
+        api_key=cfg["api_key"],
+        base_url=cfg["api_base"],
     )
-    return client, model
+    return client, cfg["model"]
 
 
 def _call_llm(client: OpenAI, model: str, system: str, user: str) -> str:
+    cfg = get_llm_config()
     resp = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        temperature=0.3,
-        max_tokens=4096,
+        temperature=cfg["temperature"],
+        max_tokens=cfg["max_tokens"],
     )
     return resp.choices[0].message.content.strip()
 
@@ -52,21 +53,32 @@ DOC_TYPE_LABELS = {
     "论文成果": "论文与学术成果",
 }
 
+# JSON 字段名与文档类型的映射
+_DOC_TYPE_TO_KEY = {
+    "专业技能": "skills",
+    "项目经历": "projects",
+    "实习经历": "internship",
+    "论文成果": "papers",
+}
+
 # 分板块生成时的板块顺序
 _SECTION_ORDER = ["专业技能", "项目经历", "实习经历", "论文成果"]
 
 
-def _generate_resume_by_sections(
+def _generate_resume_data(
     jd_analysis: dict,
     section_contexts: dict[str, str],
     profile: dict | None = None,
-) -> str:
-    """按板块独立生成简历，每个板块只接收自己类型的材料 + JD 上下文，避免跨类别引用。"""
+) -> dict:
+    """按板块独立生成简历结构化数据（JSON dict），每个板块只接收自己类型的材料。
+
+    Returns:
+        简历结构化数据字典，包含 name/email/phone/github/education/awards/skills/projects/internship/papers 等字段。
+    """
     client, model = _get_llm_client()
     jd_text = json.dumps(jd_analysis, ensure_ascii=False, indent=2)
-    sections: list[str] = []
 
-    # 1. 个人信息 / 教育背景 / 获奖与证书
+    # ---- 1. 个人信息 / 教育背景 / 获奖 → LLM 输出 JSON ----
     profile_text = (
         json.dumps(profile, ensure_ascii=False, indent=2)
         if profile
@@ -75,9 +87,21 @@ def _generate_resume_by_sections(
     profile_prompt = PROFILE_SECTION_USER.format(
         profile=profile_text, jd_analysis=jd_text,
     )
-    sections.append(_call_llm(client, model, PROFILE_SECTION_SYSTEM, profile_prompt))
+    profile_raw = _call_llm(client, model, PROFILE_SECTION_SYSTEM, profile_prompt)
+    try:
+        resume_data = _parse_json_response(profile_raw)
+    except (json.JSONDecodeError, Exception):
+        # 解析失败时使用 profile 中的原始字段
+        resume_data = {
+            "name": (profile or {}).get("name", ""),
+            "email": (profile or {}).get("email", ""),
+            "phone": (profile or {}).get("phone", ""),
+            "github": (profile or {}).get("github", ""),
+            "education": (profile or {}).get("education", ""),
+            "awards": (profile or {}).get("awards", ""),
+        }
 
-    # 2. 各内容板块独立生成（每次 LLM 调用只看到该类型的材料）
+    # ---- 2. 各内容板块独立生成（每次 LLM 调用只看到该类型的材料） ----
     for doc_type in _SECTION_ORDER:
         materials = section_contexts.get(doc_type)
         if not materials or not materials.strip():
@@ -86,7 +110,7 @@ def _generate_resume_by_sections(
         label = DOC_TYPE_LABELS.get(doc_type, doc_type)
         format_inst = SECTION_FORMAT_INSTRUCTIONS.get(
             doc_type,
-            f"输出「# {label}」标题及相关内容。",
+            f"输出「{label}」相关内容。",
         )
         prompt = SECTION_GENERATION_USER.format(
             section_name=label,
@@ -94,9 +118,11 @@ def _generate_resume_by_sections(
             section_materials=materials,
             format_instructions=format_inst,
         )
-        sections.append(_call_llm(client, model, SECTION_GENERATION_SYSTEM, prompt))
+        section_content = _call_llm(client, model, SECTION_GENERATION_SYSTEM, prompt)
+        key = _DOC_TYPE_TO_KEY.get(doc_type, doc_type)
+        resume_data[key] = section_content
 
-    return "\n\n".join(sections)
+    return resume_data
 
 
 def generate_resume(
@@ -105,28 +131,27 @@ def generate_resume(
     personal_context: str | None = None,
     persist_directory: str | None = None,
     profile: dict | None = None,
-) -> str:
-    """根据 JD 分析结果生成简历 Markdown 内容。
+) -> dict:
+    """根据 JD 分析结果生成简历结构化数据。
 
     Args:
         jd_analysis: JD 分析结果字典
-        section_contexts: 按类型分类的检索文本 {"project": "...", "internship": "...", ...}
+        section_contexts: 按类型分类的检索文本 {"项目经历": "...", "实习经历": "...", ...}
         personal_context: 兼容旧接口，合并的个人材料文本
         persist_directory: 向量库路径
         profile: 提取的个人基本信息字典
 
     Returns:
-        简历 Markdown 文本
+        简历结构化数据字典（JSON 格式）
     """
-    # 分板块独立生成：每个板块只看到自己的材料 + JD，避免跨类别引用
+    # 分板块独立生成
     if section_contexts:
-        return _generate_resume_by_sections(jd_analysis, section_contexts, profile)
+        return _generate_resume_data(jd_analysis, section_contexts, profile)
 
-    # === 以下为旧的单 Prompt 路径（向后兼容） ===
+    # === 以下为旧的单 Prompt 兼容路径 ===
     if personal_context is not None:
         categorized_context = personal_context
     else:
-        # 兼容旧逻辑：自动 RAG 检索
         keywords = jd_analysis.get("keywords", [])
         tech_stack = jd_analysis.get("tech_stack", [])
         responsibilities = jd_analysis.get("core_responsibilities", [])
@@ -144,13 +169,10 @@ def generate_resume(
         except Exception:
             categorized_context = "（个人知识库为空或检索失败，请补充个人材料）"
 
-    # 确定哪些简历板块有材料支撑
     available_sections = list(section_contexts.keys()) if section_contexts else []
 
     client, model = _get_llm_client()
     profile_text = json.dumps(profile, ensure_ascii=False, indent=2) if profile else "（未提取到个人基本信息，请从材料中推断或标注 TODO）"
-
-    # 构建板块指令：告诉 LLM 哪些板块有材料、哪些没有
     section_instructions = _build_section_instructions(available_sections)
 
     prompt = RESUME_GENERATION_USER.format(
@@ -160,7 +182,8 @@ def generate_resume(
         section_instructions=section_instructions,
     )
     resume_md = _call_llm(client, model, RESUME_GENERATION_SYSTEM, prompt)
-    return resume_md
+    # 旧路径返回纯 Markdown 文本，包装为 dict 以保持接口一致
+    return {"_raw_markdown": resume_md}
 
 
 def _build_section_instructions(available_sections: list[str]) -> str:
