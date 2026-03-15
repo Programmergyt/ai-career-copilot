@@ -1,7 +1,7 @@
 """文档入库 — 将文本分块后写入 ChromaDB 向量数据库"""
 
+import hashlib
 import os
-import uuid
 from langchain_text_splitters  import RecursiveCharacterTextSplitter,MarkdownHeaderTextSplitter
 from langchain_community.vectorstores import Chroma
 
@@ -78,7 +78,10 @@ def build_index(
         persist_directory=persist_directory,
     )
 
-    ids = [str(uuid.uuid4()) for _ in all_chunks]
+    ids = [
+        hashlib.md5((meta.get("source_file", "") + chunk).encode("utf-8")).hexdigest()
+        for chunk, meta in zip(all_chunks, all_metas)
+    ]
 
     vectorstore.add_texts(
         texts=all_chunks,

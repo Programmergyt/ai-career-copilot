@@ -44,7 +44,7 @@ def _parse_json_response(text: str):
     return json.loads(cleaned)
 
 
-VALID_DOC_TYPES = {"profile", "project", "internship", "skill", "paper"}
+VALID_DOC_TYPES = {"个人信息", "项目经历", "实习经历", "专业技能", "论文成果"}
 
 
 def classify_documents(parsed_docs: list[dict]) -> list[dict]:
@@ -81,7 +81,7 @@ def classify_documents(parsed_docs: list[dict]) -> list[dict]:
             src = item.get("source_file", "")
             dtype = item.get("doc_type", "project")
             if dtype not in VALID_DOC_TYPES:
-                dtype = "project"
+                dtype = "项目经历"
             type_map[src] = dtype
 
         # 更新文档分类
@@ -104,7 +104,7 @@ def extract_profile(parsed_docs: list[dict]) -> dict | None:
     Returns:
         个人基本信息字典，或 None（无 profile 文档时）
     """
-    profile_docs = [d for d in parsed_docs if d.get("doc_type") == "profile"]
+    profile_docs = [d for d in parsed_docs if d.get("doc_type") == "个人信息"]
     if not profile_docs:
         return None
 

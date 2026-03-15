@@ -2,7 +2,7 @@
 # Python >= 3.10
 
 # LLM 调用
-openai>=1.0.0
+openai==2.15.0
 
 # LangChain / LangGraph 生态
 langchain>=0.3.0

@@ -115,29 +115,53 @@ def node_extract_profile(state: WorkflowState) -> dict:
     }
 
 
+# 需要参与 RAG 的文档类型及其对应的向量数据库 collection 名称
+RAG_DOC_TYPES = ["项目经历", "实习经历", "专业技能", "论文成果"]
+
+# 中文业务文档类型 -> 英文安全 collection 名称
+DOC_TYPE_TO_COLLECTION = {
+    "个人信息": "profile",
+    "项目经历": "projects",
+    "实习经历": "internships",
+    "专业技能": "skills",
+}
+
+
+def _collection_name(doc_type: str) -> str:
+    """根据文档类型生成对应的 collection 名称。"""
+    name = DOC_TYPE_TO_COLLECTION.get(doc_type, "others")
+    return f"personal_{name}"
+
+
 def node_build_index(state: WorkflowState) -> dict:
-    """将 project/internship/skill 类型文档入库 RAG 向量数据库。"""
+    """按文档类型分别入库到独立的 RAG 向量数据库 collection。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[4/8] 构建 RAG 向量索引...")
+    logs.append("[4/8] 构建 RAG 向量索引（按类型分库）...")
 
     parsed_docs = state.get("parsed_docs") or []
 
-    # 仅嵌入 project / internship / skill / paper 类型
-    rag_types = {"project", "internship", "skill","paper"}
-    rag_docs = [d for d in parsed_docs if d.get("doc_type") in rag_types]
+    total_indexed = 0
+    for doc_type in RAG_DOC_TYPES:
+        type_docs = [d for d in parsed_docs if d.get("doc_type") == doc_type]
+        if not type_docs:
+            continue
 
-    if not rag_docs:
-        logs.append("  → 无 project/internship/skill/paper 文档可入库")
-        return {"current_step": "build_index", "analysis_log": logs}
+        texts = [d["text"] for d in type_docs]
+        metas = [{"source_file": d["source_file"], "doc_type": d["doc_type"]} for d in type_docs]
 
-    texts = [d["text"] for d in rag_docs]
-    metas = [{"source_file": d["source_file"], "doc_type": d["doc_type"]} for d in rag_docs]
+        try:
+            build_index(
+                texts=texts,
+                metadatas=metas,
+                collection_name=_collection_name(doc_type),
+            )
+            logs.append(f"  → {doc_type}: 成功入库 {len(texts)} 份文档")
+            total_indexed += len(texts)
+        except Exception as e:
+            logs.append(f"  → {doc_type}: 入库失败: {e}")
 
-    try:
-        build_index(texts=texts, metadatas=metas)
-        logs.append(f"  → 成功入库 {len(texts)} 份文档（类型: {', '.join(rag_types & {d['doc_type'] for d in rag_docs})}）")
-    except Exception as e:
-        logs.append(f"  → 入库失败: {e}")
+    if total_indexed == 0:
+        logs.append("  → 无文档可入库")
 
     return {
         "current_step": "build_index",
@@ -169,49 +193,75 @@ def node_analyze_jd(state: WorkflowState) -> dict:
 
 
 def node_retrieve_projects(state: WorkflowState) -> dict:
-    """RAG 检索与 JD 匹配的个人项目片段。"""
+    """按文档类型从各自的向量数据库中分别 RAG 检索。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[6/8] RAG 检索个人材料...")
+    logs.append("[6/8] RAG 分类检索个人材料...")
 
     jd_analysis = state.get("jd_analysis", {})
     keywords = jd_analysis.get("keywords", [])
     tech_stack = jd_analysis.get("tech_stack", [])
     query = "，".join(keywords + tech_stack) if (keywords or tech_stack) else state["jd_text"][:200]
 
-    try:
-        results = retrieve(query=query, top_k=10, rerank_top_n=5)
-        # 打印检索到的结果
-        for i, res in enumerate(results):
-            logs.append(f"    [{i+1}] 来源: {res['metadata'].get('source_file', '未知')}，内容片段: {res['text'][:100]}...")
-        logs.append(f"  ✓ 检索到 {len(results)} 条相关片段")
-        return {
-            "matched_projects": results,
-            "current_step": "retrieve_projects",
-            "analysis_log": logs,
-        }
-    except Exception as e:
-        logs.append(f"  ✗ RAG 检索失败: {e}")
-        return {
-            "matched_projects": [],
-            "current_step": "retrieve_projects",
-            "analysis_log": logs,
-        }
+    # 检查哪些类型有入库文档
+    parsed_docs = state.get("parsed_docs") or []
+    available_types = {d["doc_type"] for d in parsed_docs} & set(RAG_DOC_TYPES)
+
+    matched_sections: dict[str, list] = {}
+
+    for doc_type in RAG_DOC_TYPES:
+        if doc_type not in available_types:
+            continue
+
+        try:
+            results = retrieve(
+                query=query,
+                top_k=10,
+                rerank_top_n=5,
+                collection_name=_collection_name(doc_type),
+            )
+            if results:
+                matched_sections[doc_type] = results
+                logs.append(f"  → {doc_type}: 检索到 {len(results)} 条片段")
+                for i, res in enumerate(results):
+                    logs.append(f"    [{i+1}] {res['metadata'].get('source_file', '未知')}: {res['text'][:80]}...")
+            else:
+                logs.append(f"  → {doc_type}: 无匹配结果")
+        except Exception as e:
+            logs.append(f"  ✗ {doc_type} 检索失败: {e}")
+
+    total = sum(len(v) for v in matched_sections.values())
+    logs.append(f"  ✓ 共检索到 {total} 条相关片段，覆盖 {len(matched_sections)} 个类型")
+
+    return {
+        "matched_sections": matched_sections,
+        "current_step": "retrieve_projects",
+        "analysis_log": logs,
+    }
+
+
+def _build_section_context(matched_sections: dict) -> dict[str, str]:
+    """将各类型的检索结果组装为分类文本。"""
+    section_contexts = {}
+    for doc_type, results in matched_sections.items():
+        if results:
+            section_contexts[doc_type] = "\n\n".join(r["text"] for r in results)
+    return section_contexts
 
 
 def node_generate_resume(state: WorkflowState) -> dict:
-    """简历生成节点。根据 JD 分析、RAG匹配到的个人材料和个人基本信息生成简历草稿。"""
+    """简历生成节点。根据 JD 分析、按类型 RAG 检索结果和个人基本信息生成简历草稿。"""
     logs = list(state.get("analysis_log") or [])
     logs.append("[7/8] 生成定制化简历...")
 
     jd_analysis = state.get("jd_analysis", {})
-    matched = state.get("matched_projects") or []
-    personal_context = "\n\n".join(r["text"] for r in matched) if matched else None
+    matched_sections = state.get("matched_sections") or {}
+    section_contexts = _build_section_context(matched_sections)
     profile = state.get("profile")
 
     try:
         resume_md = generate_resume(
             jd_analysis=jd_analysis,
-            personal_context=personal_context,
+            section_contexts=section_contexts,
             profile=profile,
         )
         logs.append("  ✓ 简历草稿生成完成")
@@ -353,7 +403,7 @@ def run_pipeline(
         "parsed_docs": None,
         "profile": None,
         "jd_analysis": None,
-        "matched_projects": None,
+        "matched_sections": None,
         "resume_draft": None,
         "resume_final": None,
         "resume_file": None,

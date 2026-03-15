@@ -16,7 +16,7 @@ class WorkflowState(TypedDict):
     parsed_docs: Optional[list[dict]]     # 解析后的文档列表 [{"text": str, "source_file": str, "doc_type": str}]
     profile: Optional[dict]               # 提取的个人基本信息（姓名、电话、邮箱、学历、教育背景等）
     jd_analysis: Optional[dict]           # JD 分析结果（结构化 JSON）
-    matched_projects: Optional[list]      # RAG 匹配到的项目片段
+    matched_sections: Optional[dict]      # 按类型分别 RAG 检索的结果 {"project": [...], "internship": [...], "skill": [...], "paper": [...]}
     resume_draft: Optional[str]           # 简历草稿（Markdown）
     resume_final: Optional[str]           # 最终简历内容
 

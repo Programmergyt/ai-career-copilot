@@ -4,7 +4,12 @@ import json
 import os
 from openai import OpenAI
 
-from prompts.resume_generation import RESUME_GENERATION_SYSTEM, RESUME_GENERATION_USER
+from prompts.resume_generation import (
+    RESUME_GENERATION_SYSTEM, RESUME_GENERATION_USER,
+    SECTION_GENERATION_SYSTEM, SECTION_GENERATION_USER,
+    SECTION_FORMAT_INSTRUCTIONS,
+    PROFILE_SECTION_SYSTEM, PROFILE_SECTION_USER,
+)
 from prompts.self_check import SELF_CHECK_SYSTEM, SELF_CHECK_USER
 from rag.retriever import retrieve
 
@@ -40,8 +45,63 @@ def _parse_json_response(text: str) -> dict:
     return json.loads(cleaned)
 
 
+DOC_TYPE_LABELS = {
+    "项目经历": "项目经历",
+    "实习经历": "实习/工作经历",
+    "专业技能": "专业技能",
+    "论文成果": "论文与学术成果",
+}
+
+# 分板块生成时的板块顺序
+_SECTION_ORDER = ["专业技能", "项目经历", "实习经历", "论文成果"]
+
+
+def _generate_resume_by_sections(
+    jd_analysis: dict,
+    section_contexts: dict[str, str],
+    profile: dict | None = None,
+) -> str:
+    """按板块独立生成简历，每个板块只接收自己类型的材料 + JD 上下文，避免跨类别引用。"""
+    client, model = _get_llm_client()
+    jd_text = json.dumps(jd_analysis, ensure_ascii=False, indent=2)
+    sections: list[str] = []
+
+    # 1. 个人信息 / 教育背景 / 获奖与证书
+    profile_text = (
+        json.dumps(profile, ensure_ascii=False, indent=2)
+        if profile
+        else "（未提取到个人基本信息，请标注 TODO）"
+    )
+    profile_prompt = PROFILE_SECTION_USER.format(
+        profile=profile_text, jd_analysis=jd_text,
+    )
+    sections.append(_call_llm(client, model, PROFILE_SECTION_SYSTEM, profile_prompt))
+
+    # 2. 各内容板块独立生成（每次 LLM 调用只看到该类型的材料）
+    for doc_type in _SECTION_ORDER:
+        materials = section_contexts.get(doc_type)
+        if not materials or not materials.strip():
+            continue
+
+        label = DOC_TYPE_LABELS.get(doc_type, doc_type)
+        format_inst = SECTION_FORMAT_INSTRUCTIONS.get(
+            doc_type,
+            f"输出「# {label}」标题及相关内容。",
+        )
+        prompt = SECTION_GENERATION_USER.format(
+            section_name=label,
+            jd_analysis=jd_text,
+            section_materials=materials,
+            format_instructions=format_inst,
+        )
+        sections.append(_call_llm(client, model, SECTION_GENERATION_SYSTEM, prompt))
+
+    return "\n\n".join(sections)
+
+
 def generate_resume(
     jd_analysis: dict,
+    section_contexts: dict[str, str] | None = None,
     personal_context: str | None = None,
     persist_directory: str | None = None,
     profile: dict | None = None,
@@ -50,15 +110,23 @@ def generate_resume(
 
     Args:
         jd_analysis: JD 分析结果字典
-        personal_context: 个人材料文本（如已有）；为 None 时自动 RAG 检索
+        section_contexts: 按类型分类的检索文本 {"project": "...", "internship": "...", ...}
+        personal_context: 兼容旧接口，合并的个人材料文本
         persist_directory: 向量库路径
         profile: 提取的个人基本信息字典
 
     Returns:
         简历 Markdown 文本
     """
-    # RAG 检索个人素材
-    if personal_context is None:
+    # 分板块独立生成：每个板块只看到自己的材料 + JD，避免跨类别引用
+    if section_contexts:
+        return _generate_resume_by_sections(jd_analysis, section_contexts, profile)
+
+    # === 以下为旧的单 Prompt 路径（向后兼容） ===
+    if personal_context is not None:
+        categorized_context = personal_context
+    else:
+        # 兼容旧逻辑：自动 RAG 检索
         keywords = jd_analysis.get("keywords", [])
         tech_stack = jd_analysis.get("tech_stack", [])
         responsibilities = jd_analysis.get("core_responsibilities", [])
@@ -72,19 +140,40 @@ def generate_resume(
                 rerank_top_n=5,
                 persist_directory=persist_directory,
             )
-            personal_context = "\n\n".join(r["text"] for r in rag_results)
+            categorized_context = "\n\n".join(r["text"] for r in rag_results)
         except Exception:
-            personal_context = "（个人知识库为空或检索失败，请补充个人材料）"
+            categorized_context = "（个人知识库为空或检索失败，请补充个人材料）"
+
+    # 确定哪些简历板块有材料支撑
+    available_sections = list(section_contexts.keys()) if section_contexts else []
 
     client, model = _get_llm_client()
     profile_text = json.dumps(profile, ensure_ascii=False, indent=2) if profile else "（未提取到个人基本信息，请从材料中推断或标注 TODO）"
+
+    # 构建板块指令：告诉 LLM 哪些板块有材料、哪些没有
+    section_instructions = _build_section_instructions(available_sections)
+
     prompt = RESUME_GENERATION_USER.format(
         jd_analysis=json.dumps(jd_analysis, ensure_ascii=False, indent=2),
-        personal_context=personal_context,
+        personal_context=categorized_context,
         profile=profile_text,
+        section_instructions=section_instructions,
     )
     resume_md = _call_llm(client, model, RESUME_GENERATION_SYSTEM, prompt)
     return resume_md
+
+
+def _build_section_instructions(available_sections: list[str]) -> str:
+    """根据实际可用的文档类型，生成简历板块指令。"""
+    all_types = ["项目经历", "实习经历", "专业技能", "论文成果"]
+    lines = []
+    for t in all_types:
+        label = DOC_TYPE_LABELS[t]
+        if t in available_sections:
+            lines.append(f"- {label}：有材料，请根据材料撰写此板块")
+        else:
+            lines.append(f"- {label}：无材料，请跳过此板块（不要输出该标题）")
+    return "\n".join(lines)
 
 
 def self_check_resume(jd_analysis: dict, resume_content: str) -> dict:
