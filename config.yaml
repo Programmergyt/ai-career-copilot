@@ -5,7 +5,7 @@ llm:
   api_base: "https://api.deepseek.com"
   api_key_env: "DEEPSEEK_API_KEY"        # 环境变量中的 API Key 名称
   temperature: 0.3
-  max_tokens: 4096
+  max_tokens: 8192
 
 embedding:
   model: "text-embedding-v4"
@@ -16,10 +16,16 @@ rerank:
   api_key_env: "DASHSCOPE_API_KEY"        # 环境变量中的 API Key 名称
   top_n: 5
 
+langsmith:
+  tracing_v2: true                      # 是否开启追踪
+  project: "ai-career-copilot"          # 项目名称
+  api_key_env: "LANGCHAIN_API_KEY"      # 引用环境变量名
+  endpoint: "https://api.smith.langchain.com"
+
 rag:
   chunk_size: 512
   chunk_overlap: 50
-  search_top_k: 10
+  search_top_k: 20
   rerank_top_n: 5
 
 vector_store:

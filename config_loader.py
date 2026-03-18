@@ -9,8 +9,25 @@ import os
 from pathlib import Path
 
 import yaml
+from dotenv import dotenv_values
 
 _config: dict | None = None
+_dotenv: dict | None = None
+
+
+def _get_dotenv() -> dict:
+    """加载 .env 文件内容（缓存）。优先从项目根目录读取。"""
+    global _dotenv
+    if _dotenv is None:
+        env_path = Path(__file__).parent / ".env"
+        _dotenv = dotenv_values(env_path) if env_path.exists() else {}
+    return _dotenv
+
+
+def _resolve_api_key(env_var_name: str) -> str:
+    """解析 API Key：优先 .env 文件，其次系统环境变量。"""
+    dotenv = _get_dotenv()
+    return dotenv.get(env_var_name) or os.environ.get(env_var_name, "")
 
 
 def load_config(config_path: str | None = None) -> dict:
@@ -40,7 +57,7 @@ def get_llm_config() -> dict:
     return {
         "model": cfg["model"],
         "api_base": cfg["api_base"],
-        "api_key": os.environ.get(cfg["api_key_env"], ""),
+        "api_key": _resolve_api_key(cfg["api_key_env"]),
         "temperature": cfg.get("temperature", 0.3),
         "max_tokens": cfg.get("max_tokens", 4096),
     }
@@ -51,7 +68,7 @@ def get_embedding_config() -> dict:
     cfg = get_config()["embedding"]
     return {
         "model": cfg["model"],
-        "api_key": os.environ.get(cfg["api_key_env"], ""),
+        "api_key": _resolve_api_key(cfg["api_key_env"]),
     }
 
 
@@ -60,7 +77,7 @@ def get_rerank_config() -> dict:
     cfg = get_config()["rerank"]
     return {
         "model": cfg["model"],
-        "api_key": os.environ.get(cfg["api_key_env"], ""),
+        "api_key": _resolve_api_key(cfg["api_key_env"]),
         "top_n": cfg.get("top_n", 5),
     }
 

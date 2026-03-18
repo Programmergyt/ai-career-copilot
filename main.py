@@ -11,11 +11,12 @@ from pathlib import Path
 from workflow.graph import run_pipeline
 from tools.file_parser import parse_file
 from memory.long_term_memory import init_db
+from agents.llm import setup_langsmith
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AI Career Copilot — 基于多 Agent 协作的求职辅助系统 (MVP)",
+        description="AI Career Copilot — 基于多 Agent 协作的求职辅助系统",
     )
     parser.add_argument(
         "--jd",
@@ -39,6 +40,11 @@ def main():
     # 初始化长期记忆数据库，重置以清空历史记录，实际运行时可去掉 reset=True
     init_db(None, reset=True)
 
+    # 设置 LangSmith 追踪
+    langsmith_url = setup_langsmith()
+    if langsmith_url:
+        print(f"🔗 LangSmith 追踪面板: {langsmith_url}")
+
     # 解析 JD：如果是文件路径则读取文件内容，否则视为直接文本
     jd_path = Path(args.jd)
     if jd_path.exists() and jd_path.is_file():
@@ -61,13 +67,13 @@ def main():
             print(f"⚠️  文件不存在，跳过: {doc}")
 
     print(f"\n{'='*60}")
-    print("🚀 AI Career Copilot — MVP Pipeline")
+    print("🚀 AI Career Copilot Pipeline")
     print(f"{'='*60}")
     print(f"JD 长度: {len(jd_text)} 字符")
     print(f"个人材料: {len(valid_docs)} 个路径（文件/文件夹）")
     print(f"{'='*60}\n")
 
-    # 运行 Pipeline
+    # 运行 Pipeline（日志已在各节点实时输出到控制台）
     try:
         final_state = run_pipeline(
             jd_text=jd_text,
@@ -78,20 +84,18 @@ def main():
         print(f"\n❌ Pipeline 执行失败: {e}")
         sys.exit(1)
 
-    # 输出结果
+    # 输出最终结果
     print(f"\n{'='*60}")
-    print("📊 执行日志:")
-    print(f"{'='*60}")
-    for log in final_state.get("analysis_log", []):
-        print(log)
-
     resume_file = final_state.get("resume_file")
     if resume_file:
-        print(f"\n✅ 简历已生成: {resume_file}")
+        print(f"✅ 简历已生成: {resume_file}")
     else:
-        print("\n⚠️  简历未能成功生成，请检查日志。")
+        print("⚠️  简历未能成功生成，请检查日志。")
 
-    print(f"\n📁 所有输出文件在 ./output/ 目录下")
+    print(f"📁 所有输出文件在 ./output/ 目录下")
+
+    if langsmith_url:
+        print(f"🔗 LangSmith 追踪详情: {langsmith_url}")
 
 
 if __name__ == "__main__":

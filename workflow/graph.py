@@ -1,4 +1,9 @@
-"""LangGraph 工作流编排 — 串联 JD 分析 → 简历生成 MVP Pipeline"""
+"""LangGraph 工作流编排 — 串联 JD 分析 → 简历生成 Pipeline
+
+流程:
+  parse_docs → analyze_jd → classify_docs → extract_profile
+  → refine_skills → build_index → retrieve → generate → self_check → save
+"""
 
 import json
 from langgraph.graph import StateGraph, END
@@ -9,8 +14,20 @@ from rag.indexer import build_index
 from rag.retriever import retrieve
 from agents.jd_analyzer import analyze_jd
 from agents.resume_writer import generate_resume, self_check_resume
-from agents.doc_classifier import classify_documents, extract_profile
+from agents.doc_classifier import classify_documents, extract_profile, refine_skill_documents
+from agents.llm import call_llm
 from tools.template_renderer import save_output, render_resume
+from prompts.jd_analysis import MATCH_EXPLANATION_SYSTEM, MATCH_EXPLANATION_USER
+
+
+# ============================================================
+# 实时日志工具
+# ============================================================
+
+def _log(msg: str, logs: list[str]) -> None:
+    """即时输出日志到控制台并记录到日志列表。"""
+    print(msg, flush=True)
+    logs.append(msg)
 
 
 # ============================================================
@@ -20,7 +37,7 @@ from tools.template_renderer import save_output, render_resume
 def node_parse_documents(state: WorkflowState) -> dict:
     """解析个人材料文档（仅解析，不入库）。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[1/8] 开始解析个人材料文档...")
+    _log("[1/10] 开始解析个人材料文档...", logs)
 
     parsed_docs = []
     for fpath in state["personal_docs"]:
@@ -30,14 +47,14 @@ def node_parse_documents(state: WorkflowState) -> dict:
             dir_results = parse_directory(fpath)
             for sub_path, text in dir_results.items():
                 if text.startswith("[解析失败]"):
-                    logs.append(f"  ✗ 解析失败: {sub_path} — {text}")
+                    _log(f"  ✗ 解析失败: {sub_path} — {text}", logs)
                 else:
                     parsed_docs.append({
                         "text": text,
                         "source_file": sub_path,
-                        "doc_type": "personal",  # 初始类型，后续由 LLM 分类
+                        "doc_type": "personal",
                     })
-                    logs.append(f"  ✓ 解析成功: {sub_path}")
+                    _log(f"  ✓ 解析成功: {sub_path}", logs)
         else:
             try:
                 text = parse_file(fpath)
@@ -46,11 +63,11 @@ def node_parse_documents(state: WorkflowState) -> dict:
                     "source_file": fpath,
                     "doc_type": "personal",
                 })
-                logs.append(f"  ✓ 解析成功: {fpath}")
+                _log(f"  ✓ 解析成功: {fpath}", logs)
             except Exception as e:
-                logs.append(f"  ✗ 解析失败: {fpath} — {e}")
+                _log(f"  ✗ 解析失败: {fpath} — {e}", logs)
 
-    logs.append(f"  → 共解析 {len(parsed_docs)} 份文档")
+    _log(f"  → 共解析 {len(parsed_docs)} 份文档", logs)
 
     return {
         "parsed_docs": parsed_docs,
@@ -59,28 +76,52 @@ def node_parse_documents(state: WorkflowState) -> dict:
     }
 
 
-def node_classify_documents(state: WorkflowState) -> dict:
-    """使用 LLM 对文档进行分类（profile/project/internship/skill/paper）。"""
+def node_analyze_jd(state: WorkflowState) -> dict:
+    """JD 分析节点（提前到第 2 步，为后续分类和提炼提供依据）。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[2/8] 文档分类中...")
+    _log("[2/10] 开始分析 JD...", logs)
+
+    try:
+        jd_analysis = analyze_jd(state["jd_text"])
+        _log("  ✓ JD 分析完成", logs)
+        _log(f"  → 岗位: {jd_analysis.get('position_title', '未知')}", logs)
+        _log(f"  → 技术栈: {jd_analysis.get('tech_stack', [])}", logs)
+        _log(f"  → 关键词: {jd_analysis.get('keywords', [])}", logs)
+        return {
+            "jd_analysis": jd_analysis,
+            "current_step": "analyze_jd",
+            "analysis_log": logs,
+        }
+    except Exception as e:
+        _log(f"  ✗ JD 分析失败: {e}", logs)
+        return {
+            "error": str(e),
+            "current_step": "analyze_jd",
+            "analysis_log": logs,
+        }
+
+
+def node_classify_documents(state: WorkflowState) -> dict:
+    """使用 LLM 对文档进行分类（个人信息/项目经历/实习经历/专业技能/论文成果）。"""
+    logs = list(state.get("analysis_log") or [])
+    _log("[3/10] 文档分类中...", logs)
 
     parsed_docs = list(state.get("parsed_docs") or [])
     if not parsed_docs:
-        logs.append("  → 无文档可分类")
+        _log("  → 无文档可分类", logs)
         return {"parsed_docs": parsed_docs, "current_step": "classify_documents", "analysis_log": logs}
 
     try:
         parsed_docs = classify_documents(parsed_docs)
-        # 统计各类型数量
         type_counts = {}
         for doc in parsed_docs:
             t = doc["doc_type"]
             type_counts[t] = type_counts.get(t, 0) + 1
         for t, cnt in type_counts.items():
-            logs.append(f"  → {t}: {cnt} 份")
-        logs.append("  ✓ 文档分类完成")
+            _log(f"  → {t}: {cnt} 份", logs)
+        _log("  ✓ 文档分类完成", logs)
     except Exception as e:
-        logs.append(f"  ✗ 文档分类失败: {e}")
+        _log(f"  ✗ 文档分类失败: {e}", logs)
 
     return {
         "parsed_docs": parsed_docs,
@@ -92,7 +133,7 @@ def node_classify_documents(state: WorkflowState) -> dict:
 def node_extract_profile(state: WorkflowState) -> dict:
     """从 profile 类型文档中提取个人基本信息。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[3/8] 提取个人基本信息...")
+    _log("[4/10] 提取个人基本信息...", logs)
 
     parsed_docs = state.get("parsed_docs") or []
     profile = None
@@ -100,17 +141,48 @@ def node_extract_profile(state: WorkflowState) -> dict:
     try:
         profile = extract_profile(parsed_docs)
         if profile and not profile.get("parse_error"):
-            logs.append(f"  ✓ 提取成功 — 姓名: {profile.get('name', '未知')}")
+            _log(f"  ✓ 提取成功 — 姓名: {profile.get('name', '未知')}", logs)
         elif profile:
-            logs.append("  ⚠ 信息提取结果解析异常，使用原始文本")
+            _log("  ⚠ 信息提取结果解析异常，使用原始文本", logs)
         else:
-            logs.append("  → 未找到 profile 类型文档，跳过提取")
+            _log("  → 未找到 个人信息 类型文档，跳过提取", logs)
     except Exception as e:
-        logs.append(f"  ✗ 提取失败: {e}")
+        _log(f"  ✗ 提取失败: {e}", logs)
 
     return {
         "profile": profile,
         "current_step": "extract_profile",
+        "analysis_log": logs,
+    }
+
+
+def node_refine_skills(state: WorkflowState) -> dict:
+    """对「专业技能」类文档进行 LLM 提炼，只保留与 JD 相关的内容后再入库。"""
+    logs = list(state.get("analysis_log") or [])
+    _log("[5/10] 技能材料提炼（针对 JD 筛选）...", logs)
+
+    parsed_docs = list(state.get("parsed_docs") or [])
+    jd_analysis = state.get("jd_analysis") or {}
+
+    skill_docs = [d for d in parsed_docs if d.get("doc_type") == "专业技能"]
+    if not skill_docs:
+        _log("  → 无专业技能文档，跳过提炼", logs)
+        return {"parsed_docs": parsed_docs, "current_step": "refine_skills", "analysis_log": logs}
+
+    if not jd_analysis:
+        _log("  → JD 分析结果为空，跳过提炼", logs)
+        return {"parsed_docs": parsed_docs, "current_step": "refine_skills", "analysis_log": logs}
+
+    try:
+        parsed_docs = refine_skill_documents(parsed_docs, jd_analysis)
+        refined_count = sum(1 for d in parsed_docs if d.get("text_original"))
+        _log(f"  ✓ 已提炼 {refined_count} 份技能文档", logs)
+    except Exception as e:
+        _log(f"  ✗ 技能提炼失败，使用原始文本: {e}", logs)
+
+    return {
+        "parsed_docs": parsed_docs,
+        "current_step": "refine_skills",
         "analysis_log": logs,
     }
 
@@ -136,7 +208,7 @@ def _collection_name(doc_type: str) -> str:
 def node_build_index(state: WorkflowState) -> dict:
     """按文档类型分别入库到独立的 RAG 向量数据库 collection。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[4/8] 构建 RAG 向量索引（按类型分库）...")
+    _log("[6/10] 构建 RAG 向量索引（按类型分库）...", logs)
 
     parsed_docs = state.get("parsed_docs") or []
 
@@ -155,13 +227,13 @@ def node_build_index(state: WorkflowState) -> dict:
                 metadatas=metas,
                 collection_name=_collection_name(doc_type),
             )
-            logs.append(f"  → {doc_type}: 成功入库 {len(texts)} 份文档")
+            _log(f"  → {doc_type}: 成功入库 {len(texts)} 份文档", logs)
             total_indexed += len(texts)
         except Exception as e:
-            logs.append(f"  → {doc_type}: 入库失败: {e}")
+            _log(f"  → {doc_type}: 入库失败: {e}", logs)
 
     if total_indexed == 0:
-        logs.append("  → 无文档可入库")
+        _log("  → 无文档可入库", logs)
 
     return {
         "current_step": "build_index",
@@ -169,38 +241,47 @@ def node_build_index(state: WorkflowState) -> dict:
     }
 
 
-def node_analyze_jd(state: WorkflowState) -> dict:
-    """JD 分析节点。"""
-    logs = list(state.get("analysis_log") or [])
-    logs.append("[5/8] 开始分析 JD...")
+def _explain_match_reasons(
+    jd_analysis: dict,
+    doc_type: str,
+    results: list[dict],
+) -> str:
+    """使用 LLM 为检索到的材料生成匹配原因说明。"""
+    position = jd_analysis.get("position_title", "目标岗位")
+    tech_stack = ", ".join(jd_analysis.get("tech_stack", []))
+    requirements = ", ".join(jd_analysis.get("keywords", [])[:5])
+
+    items_text = ""
+    for i, res in enumerate(results):
+        source = res["metadata"].get("source_file", "未知")
+        score = res.get("score", 0)
+        snippet = res["text"][:200]
+        items_text += f"\n{i+1}. [匹配度: {score:.3f}] 来源: {source}\n   内容: {snippet}...\n"
+
+    prompt = MATCH_EXPLANATION_USER.format(
+        position=position,
+        tech_stack=tech_stack,
+        requirements=requirements,
+        doc_type=doc_type,
+        items=items_text,
+    )
 
     try:
-        jd_analysis = analyze_jd(state["jd_text"])
-        logs.append("  ✓ JD 分析完成")
-        logs.append(f"  → 提取技术栈: {jd_analysis.get('tech_stack', [])}")
-        return {
-            "jd_analysis": jd_analysis,
-            "current_step": "analyze_jd",
-            "analysis_log": logs,
-        }
-    except Exception as e:
-        logs.append(f"  ✗ JD 分析失败: {e}")
-        return {
-            "error": str(e),
-            "current_step": "analyze_jd",
-            "analysis_log": logs,
-        }
+        return call_llm(MATCH_EXPLANATION_SYSTEM, prompt)
+    except Exception:
+        return ""
 
 
 def node_retrieve_projects(state: WorkflowState) -> dict:
-    """按文档类型从各自的向量数据库中分别 RAG 检索。"""
+    """按文档类型从各自的向量数据库中分别 RAG 检索（带 JD 的 cross-encoder rerank）。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[6/8] RAG 分类检索个人材料...")
+    _log("[7/10] RAG 分类检索个人材料（embedding recall → cross-encoder rerank）...", logs)
 
     jd_analysis = state.get("jd_analysis", {})
+    jd_text = state.get("jd_text", "")
     keywords = jd_analysis.get("keywords", [])
     tech_stack = jd_analysis.get("tech_stack", [])
-    query = "，".join(keywords + tech_stack) if (keywords or tech_stack) else state["jd_text"][:200]
+    query = "，".join(keywords + tech_stack) if (keywords or tech_stack) else jd_text[:200]
 
     # 检查哪些类型有入库文档
     parsed_docs = state.get("parsed_docs") or []
@@ -215,22 +296,32 @@ def node_retrieve_projects(state: WorkflowState) -> dict:
         try:
             results = retrieve(
                 query=query,
-                top_k=10,
-                rerank_top_n=5,
+                jd_text=jd_text,  # 将 JD 全文传给 cross-encoder rerank
                 collection_name=_collection_name(doc_type),
             )
             if results:
                 matched_sections[doc_type] = results
-                logs.append(f"  → {doc_type}: 检索到 {len(results)} 条片段")
+                _log(f"  → {doc_type}: 检索到 {len(results)} 条片段", logs)
                 for i, res in enumerate(results):
-                    logs.append(f"    [{i+1}] {res['metadata'].get('source_file', '未知')}: {res['text'][:80]}...")
+                    source = res['metadata'].get('source_file', '未知')
+                    score = res.get('score', 0)
+                    _log(f"    [{i+1}] 匹配度: {score:.3f} | 来源: {source}", logs)
+                    _log(f"        摘要: {res['text'][:80]}...", logs)
+
+                # 使用 LLM 生成详细的匹配原因
+                _log(f"  → {doc_type} 匹配原因分析:", logs)
+                explanation = _explain_match_reasons(jd_analysis, doc_type, results)
+                if explanation:
+                    for line in explanation.strip().split("\n"):
+                        if line.strip():
+                            _log(f"    {line.strip()}", logs)
             else:
-                logs.append(f"  → {doc_type}: 无匹配结果")
+                _log(f"  → {doc_type}: 无匹配结果", logs)
         except Exception as e:
-            logs.append(f"  ✗ {doc_type} 检索失败: {e}")
+            _log(f"  ✗ {doc_type} 检索失败: {e}", logs)
 
     total = sum(len(v) for v in matched_sections.values())
-    logs.append(f"  ✓ 共检索到 {total} 条相关片段，覆盖 {len(matched_sections)} 个类型")
+    _log(f"  ✓ 共检索到 {total} 条相关片段，覆盖 {len(matched_sections)} 个类型", logs)
 
     return {
         "matched_sections": matched_sections,
@@ -251,7 +342,7 @@ def _build_section_context(matched_sections: dict) -> dict[str, str]:
 def node_generate_resume(state: WorkflowState) -> dict:
     """简历生成节点。根据 JD 分析、按类型 RAG 检索结果和个人基本信息生成结构化简历数据，再通过模板渲染。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[7/8] 生成定制化简历...")
+    _log("[8/10] 生成定制化简历...", logs)
 
     jd_analysis = state.get("jd_analysis", {})
     matched_sections = state.get("matched_sections") or {}
@@ -259,22 +350,18 @@ def node_generate_resume(state: WorkflowState) -> dict:
     profile = state.get("profile")
 
     try:
-        # 1. LLM 生成结构化简历数据（JSON dict）
+        # 1. LLM 生成结构化简历数据（JSON dict），不同版块独立生成，LLM 只看到该版块的材料和 JD 分析结果
         resume_data = generate_resume(
             jd_analysis=jd_analysis,
             section_contexts=section_contexts,
             profile=profile,
         )
-        logs.append("  ✓ 简历结构化数据生成完成")
+        _log("  ✓ 简历结构化数据生成完成", logs)
 
         # 2. 通过模板渲染为 Markdown
         template_path = state.get("template_path", "./templates/default.md")
-        if "_raw_markdown" in resume_data:
-            # 旧路径兼容：直接使用原始 Markdown
-            resume_md = resume_data["_raw_markdown"]
-        else:
-            resume_md = render_resume(template_path, resume_data)
-        logs.append("  ✓ 模板渲染完成")
+        resume_md = render_resume(template_path, resume_data)
+        _log("  ✓ 模板渲染完成", logs)
 
         return {
             "resume_data": resume_data,
@@ -283,7 +370,7 @@ def node_generate_resume(state: WorkflowState) -> dict:
             "analysis_log": logs,
         }
     except Exception as e:
-        logs.append(f"  ✗ 简历生成失败: {e}")
+        _log(f"  ✗ 简历生成失败: {e}", logs)
         return {
             "error": str(e),
             "current_step": "generate_resume",
@@ -294,7 +381,7 @@ def node_generate_resume(state: WorkflowState) -> dict:
 def node_self_check(state: WorkflowState) -> dict:
     """简历自检节点 — Reflection。根据 JD 分析结果对生成的简历草稿进行自检和改进。"""
     logs = list(state.get("analysis_log") or [])
-    logs.append("[8/8] 简历自检 (Reflection)...")
+    _log("[9/10] 简历自检 (Reflection)...", logs)
 
     jd_analysis = state.get("jd_analysis", {})
     resume = state.get("resume_draft", "")
@@ -303,7 +390,10 @@ def node_self_check(state: WorkflowState) -> dict:
         check = self_check_resume(jd_analysis, resume)
         passed = check.get("pass", False)
         score = check.get("coverage_score", "N/A")
-        logs.append(f"  → 覆盖度: {score}, 通过: {passed}")
+        _log(f"  → 覆盖度: {score}, 通过: {passed}", logs)
+
+        if check.get("missing_requirements"):
+            _log(f"  → 未覆盖: {check['missing_requirements']}", logs)
 
         return {
             "resume_final": resume,
@@ -311,7 +401,7 @@ def node_self_check(state: WorkflowState) -> dict:
             "analysis_log": logs,
         }
     except Exception as e:
-        logs.append(f"  ✗ 自检失败，直接使用草稿: {e}")
+        _log(f"  ✗ 自检失败，直接使用草稿: {e}", logs)
         return {
             "resume_final": resume,
             "current_step": "self_check",
@@ -325,31 +415,31 @@ def node_save_output(state: WorkflowState) -> dict:
 
     resume_content = state.get("resume_final") or state.get("resume_draft", "")
     if not resume_content:
-        logs.append("[输出] 无简历内容可保存")
+        _log("[输出] 无简历内容可保存", logs)
         return {"analysis_log": logs}
 
     # 保存简历 Markdown
     resume_path = save_output(resume_content, "./output/resume.md")
-    logs.append(f"[输出] 简历已保存: {resume_path}")
+    _log(f"[输出] 简历已保存: {resume_path}", logs)
 
     # 保存简历结构化数据（JSON）
     resume_data = state.get("resume_data")
-    if resume_data and "_raw_markdown" not in resume_data:
+    if resume_data:
         resume_json = json.dumps(resume_data, ensure_ascii=False, indent=2)
         json_path = save_output(resume_json, "./output/resume_data.json")
-        logs.append(f"[输出] 简历结构化数据已保存: {json_path}")
+        _log(f"[输出] 简历结构化数据已保存: {json_path}", logs)
 
     # 保存 JD 分析报告
     jd_analysis = state.get("jd_analysis")
     if jd_analysis:
         report = json.dumps(jd_analysis, ensure_ascii=False, indent=2)
         report_path = save_output(report, "./output/jd_analysis.json")
-        logs.append(f"[输出] JD 分析报告已保存: {report_path}")
+        _log(f"[输出] JD 分析报告已保存: {report_path}", logs)
 
     # 保存过程日志
     log_content = "\n".join(logs)
     log_path = save_output(log_content, "./output/analysis_log.txt")
-    logs.append(f"[输出] 过程日志已保存: {log_path}")
+    _log(f"[输出] 过程日志已保存: {log_path}", logs)
 
     return {
         "resume_file": resume_path,
@@ -365,16 +455,19 @@ def node_save_output(state: WorkflowState) -> dict:
 def build_graph() -> StateGraph:
     """构建并返回工作流状态图。
 
-    流程: parse_docs → classify_docs → extract_profile → build_index → analyze_jd → retrieve → generate → self_check → save
+    流程:
+      parse_docs → analyze_jd → classify_docs → extract_profile
+      → refine_skills → build_index → retrieve → generate → self_check → save
     """
     graph = StateGraph(WorkflowState)
 
     # 添加节点
     graph.add_node("parse_documents", node_parse_documents)
+    graph.add_node("analyze_jd", node_analyze_jd)
     graph.add_node("classify_documents", node_classify_documents)
     graph.add_node("extract_profile", node_extract_profile)
+    graph.add_node("refine_skills", node_refine_skills)
     graph.add_node("build_index", node_build_index)
-    graph.add_node("analyze_jd", node_analyze_jd)
     graph.add_node("retrieve_projects", node_retrieve_projects)
     graph.add_node("generate_resume", node_generate_resume)
     graph.add_node("self_check", node_self_check)
@@ -383,12 +476,13 @@ def build_graph() -> StateGraph:
     # 设置入口
     graph.set_entry_point("parse_documents")
 
-    # 连接边
-    graph.add_edge("parse_documents", "classify_documents")
+    # 连接边: parse → analyze_jd → classify → extract_profile → refine → build → retrieve → generate → check → save
+    graph.add_edge("parse_documents", "analyze_jd")
+    graph.add_edge("analyze_jd", "classify_documents")
     graph.add_edge("classify_documents", "extract_profile")
-    graph.add_edge("extract_profile", "build_index")
-    graph.add_edge("build_index", "analyze_jd")
-    graph.add_edge("analyze_jd", "retrieve_projects")
+    graph.add_edge("extract_profile", "refine_skills")
+    graph.add_edge("refine_skills", "build_index")
+    graph.add_edge("build_index", "retrieve_projects")
     graph.add_edge("retrieve_projects", "generate_resume")
     graph.add_edge("generate_resume", "self_check")
     graph.add_edge("self_check", "save_output")
@@ -402,7 +496,7 @@ def run_pipeline(
     personal_docs: list[str],
     template_path: str = "./templates/default.md",
 ) -> WorkflowState:
-    """运行完整的 MVP Pipeline。
+    """运行完整的 Pipeline。
 
     Args:
         jd_text: JD 文本内容

@@ -1,48 +1,15 @@
-"""文档分类与个人信息提取 Agent — 使用 LLM 对文档进行分类并提取个人基本信息"""
+"""文档分类、个人信息提取与技能提炼 Agent"""
 
 import json
-from openai import OpenAI
 
+from agents.llm import call_llm, parse_json_response
 from prompts.doc_classification import (
     DOC_CLASSIFICATION_SYSTEM,
     DOC_CLASSIFICATION_USER,
     PROFILE_EXTRACTION_SYSTEM,
     PROFILE_EXTRACTION_USER,
 )
-from config_loader import get_llm_config
-
-
-def _get_llm_client() -> tuple[OpenAI, str]:
-    cfg = get_llm_config()
-    client = OpenAI(
-        api_key=cfg["api_key"],
-        base_url=cfg["api_base"],
-    )
-    return client, cfg["model"]
-
-
-def _call_llm(client: OpenAI, model: str, system: str, user: str) -> str:
-    cfg = get_llm_config()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=cfg["temperature"],
-        max_tokens=cfg["max_tokens"],
-    )
-    return resp.choices[0].message.content.strip()
-
-
-def _parse_json_response(text: str):
-    """从 LLM 回复中解析 JSON，容忍 ```json 包裹。"""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        cleaned = "\n".join(lines)
-    return json.loads(cleaned)
+from prompts.skill_refinement import SKILL_REFINEMENT_SYSTEM, SKILL_REFINEMENT_USER
 
 
 VALID_DOC_TYPES = {"个人信息", "项目经历", "实习经历", "专业技能", "论文成果"}
@@ -60,7 +27,6 @@ def classify_documents(parsed_docs: list[dict]) -> list[dict]:
     if not parsed_docs:
         return parsed_docs
 
-    # 构建文档摘要列表供 LLM 分类（截取前500字作为摘要）
     doc_summaries = []
     for i, doc in enumerate(parsed_docs):
         summary = doc["text"][:500] if len(doc["text"]) > 500 else doc["text"]
@@ -69,14 +35,11 @@ def classify_documents(parsed_docs: list[dict]) -> list[dict]:
         )
 
     doc_list_text = "\n".join(doc_summaries)
-
-    client, model = _get_llm_client()
     prompt = DOC_CLASSIFICATION_USER.format(doc_list=doc_list_text)
-    raw = _call_llm(client, model, DOC_CLASSIFICATION_SYSTEM, prompt)
+    raw = call_llm(DOC_CLASSIFICATION_SYSTEM, prompt)
 
     try:
-        classifications = _parse_json_response(raw)
-        # 构建 source_file -> doc_type 映射
+        classifications = parse_json_response(raw)
         type_map = {}
         for item in classifications:
             src = item.get("source_file", "")
@@ -85,38 +48,55 @@ def classify_documents(parsed_docs: list[dict]) -> list[dict]:
                 dtype = "项目经历"
             type_map[src] = dtype
 
-        # 更新文档分类
         for doc in parsed_docs:
             if doc["source_file"] in type_map:
                 doc["doc_type"] = type_map[doc["source_file"]]
     except (json.JSONDecodeError, KeyError):
-        # 分类失败时保留原始 doc_type
         pass
 
     return parsed_docs
 
 
 def extract_profile(parsed_docs: list[dict]) -> dict | None:
-    """从 profile 类型文档中提取个人基本信息。
-
-    Args:
-        parsed_docs: 已分类的文档列表
-
-    Returns:
-        个人基本信息字典，或 None（无 profile 文档时）
-    """
+    """从 profile 类型文档中提取个人基本信息。"""
     profile_docs = [d for d in parsed_docs if d.get("doc_type") == "个人信息"]
     if not profile_docs:
         return None
 
-    # 合并所有 profile 文档的文本
     profile_text = "\n\n---\n\n".join(d["text"] for d in profile_docs)
-
-    client, model = _get_llm_client()
     prompt = PROFILE_EXTRACTION_USER.format(profile_text=profile_text)
-    raw = _call_llm(client, model, PROFILE_EXTRACTION_SYSTEM, prompt)
+    raw = call_llm(PROFILE_EXTRACTION_SYSTEM, prompt)
 
     try:
-        return _parse_json_response(raw)
+        return parse_json_response(raw)
     except json.JSONDecodeError:
         return {"raw_profile": raw, "parse_error": True}
+
+
+def refine_skill_documents(parsed_docs: list[dict], jd_analysis: dict) -> list[dict]:
+    """使用 LLM 对「专业技能」类文档进行提炼，只保留与 JD 相关的技能。
+
+    提示词包含岗位描述，要求 LLM 针对 JD 进行选择和优化。
+
+    Args:
+        parsed_docs: 已分类的文档列表
+        jd_analysis: JD 分析结果
+
+    Returns:
+        更新了 text 字段的文档列表（技能类文档被提炼）
+    """
+    jd_text = json.dumps(jd_analysis, ensure_ascii=False, indent=2)
+
+    for doc in parsed_docs:
+        if doc.get("doc_type") != "专业技能":
+            continue
+
+        prompt = SKILL_REFINEMENT_USER.format(
+            jd_analysis=jd_text,
+            skill_text=doc["text"],
+        )
+        refined = call_llm(SKILL_REFINEMENT_SYSTEM, prompt)
+        doc["text_original"] = doc["text"]  # 保留原始文本
+        doc["text"] = refined
+
+    return parsed_docs

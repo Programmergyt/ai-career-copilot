@@ -1,10 +1,10 @@
-"""RAG 检索模块 — 向量检索 + Rerank"""
+"""RAG 检索模块 — 向量检索 + Cross-Encoder Rerank（带 JD）"""
 
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_compressors.dashscope_rerank import DashScopeRerank
 
 from rag.embeddings import get_embedding_model
-from config_loader import get_rerank_config, get_vector_store_config
+from config_loader import get_rerank_config, get_vector_store_config, get_rag_config
 
 
 def get_vectorstore(
@@ -23,19 +23,39 @@ def get_vectorstore(
 
 def retrieve(
     query: str,
-    top_k: int = 10,
-    rerank_top_n: int = 5,
+    top_k: int | None = None,
+    rerank_top_n: int | None = None,
+    jd_text: str | None = None,
     collection_name: str = "personal_knowledge",
     persist_directory: str | None = None,
 ) -> list[dict]:
-    """语义检索 + Rerank，返回最相关的文档片段。
+    """语义检索 + Cross-Encoder Rerank（带 JD 上下文）。
+
+    Flow:
+        Step 1: Embedding Recall (top_k=20)
+        Step 2: Cross-Encoder Rerank（使用 JD 全文作为 query 以提高相关性）
+        Step 3: 取 top 5
+
+    Args:
+        query: 用于 embedding 检索的关键词 query
+        top_k: embedding 召回数量，默认从 config.yaml 读取 (20)
+        rerank_top_n: rerank 后保留数量，默认从 config.yaml 读取 (5)
+        jd_text: JD 原文，用于 cross-encoder rerank 的 query（更精准）
+        collection_name: 向量库 collection 名称
+        persist_directory: 向量库路径
 
     Returns:
         [{"text": str, "score": float, "metadata": dict}, ...]
     """
+    rag_cfg = get_rag_config()
+    if top_k is None:
+        top_k = rag_cfg.get("search_top_k", 20)
+    if rerank_top_n is None:
+        rerank_top_n = rag_cfg.get("rerank_top_n", 5)
+
     vectorstore = get_vectorstore(collection_name, persist_directory)
 
-    # 第一步：向量检索 TopK
+    # Step 1: Embedding Recall top_k
     results = vectorstore.similarity_search_with_score(query, k=top_k)
     if not results:
         return []
@@ -43,16 +63,20 @@ def retrieve(
     documents = [doc.page_content for doc, _score in results]
     metas = [doc.metadata for doc, _score in results]
 
-    # 第二步：Rerank
+    # Step 2: Cross-Encoder Rerank（带 JD 全文以提高匹配精度）
+    rerank_query = jd_text if jd_text else query
+
     try:
         rerank_cfg = get_rerank_config()
         rerank_kwargs = {"model": rerank_cfg["model"]}
         if rerank_cfg["api_key"]:
             rerank_kwargs["dashscope_api_key"] = rerank_cfg["api_key"]
         reranker = DashScopeRerank(**rerank_kwargs)
+
+        # Step 3: 取 top_n
         rerank_results = reranker.rerank(
             documents=documents,
-            query=query,
+            query=rerank_query,
             top_n=rerank_top_n,
         )
         ranked = [
