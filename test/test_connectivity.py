@@ -2,22 +2,20 @@
 
 import pytest
 
-from config_loader import get_server_host
-
-
-SERVER_HOST = get_server_host()
+from config_loader import get_server_host, get_mysql_config, get_redis_config
 
 
 def test_mysql_connection() -> None:
     pymysql = pytest.importorskip("pymysql")
+    cfg = get_mysql_config()
 
     connection = pymysql.connect(
-        host=SERVER_HOST,
-        port=3306,
-        user="blogadmin",
-        password="Gyt2003@GYTsecure",
-        database="myweb",
-        charset="utf8mb4",
+        host=cfg["host"],
+        port=cfg["port"],
+        user=cfg["user"],
+        password=cfg["password"],
+        database=cfg["database"],
+        charset=cfg["charset"],
     )
     try:
         with connection.cursor() as cursor:
@@ -32,11 +30,13 @@ def test_mysql_connection() -> None:
 
 def test_redis_connection() -> None:
     redis = pytest.importorskip("redis")
+    cfg = get_redis_config()
 
     client = redis.Redis(
-        host=SERVER_HOST,
-        port=6379,
-        db=0,
+        host=cfg["host"],
+        port=cfg["port"],
+        db=cfg["db"],
+        password=cfg.get("password") or None,
         decode_responses=True,
     )
     client.set("test_key", "Hello Redis!")

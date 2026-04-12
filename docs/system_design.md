@@ -35,6 +35,15 @@ ai-career-copilot/
 ├── config.yaml                # 全局配置
 ├── config_loader.py           # 配置加载
 │
+├── log/                       # 日志模块
+│   ├── __init__.py            # 日志公共接口
+│   ├── logger.py              # 日志配置与分类
+│   ├── app.log                # 应用主日志
+│   ├── agent.log              # Agent 调用日志
+│   ├── api.log                # API 请求/响应日志
+│   ├── storage.log            # 数据库操作日志
+│   └── error.log              # ERROR 级别汇总日志
+│
 ├── models/                    # LLM / Embedding / Rerank 工厂
 │   ├── llm.py
 │   ├── embedding.py
@@ -375,3 +384,40 @@ CREATE TABLE conversation_events (
 | asyncio.Semaphore | 限制 LLM 并发调用数 |
 | Redis 分布式锁 | 防止同一 session 并发写入状态 |
 | Resume Render Agent 幂等 | 相同 content_version + render_version 不重复渲染 |
+
+---
+
+## 7. 日志系统
+
+### 7.1 日志分类
+
+| 日志文件 | Logger 名称 | 内容 |
+|----------|-------------|------|
+| `log/app.log` | `app` | 应用主日志：启动、配置加载、文件解析 |
+| `log/agent.log` | `agent` | Agent 调用日志：意图分类、执行计划、各 Agent 输入/输出 |
+| `log/api.log` | `api` | API 请求/响应日志：路由、参数、耗时 |
+| `log/storage.log` | `storage` | 数据库操作日志：Redis/MySQL 读写、连接状态 |
+| `log/error.log` | *(all)* | 所有来源的 ERROR 及以上级别汇总 |
+
+### 7.2 日志级别
+
+| 环境 | 控制台 | 文件 |
+|------|--------|------|
+| 开发 | INFO | DEBUG |
+| 生产 | WARNING | INFO |
+
+### 7.3 使用方式
+
+```python
+from log import setup_logging, get_logger
+
+setup_logging()  # 在 main.py 入口调用一次
+logger = get_logger("agent")  # 在各模块中获取分类 logger
+logger.info("JD Agent started for session %s", session_id)
+```
+
+### 7.4 日志格式
+
+```
+2026-04-12 10:30:00 | INFO    | agent | JD Agent started for session sess_abc123
+```

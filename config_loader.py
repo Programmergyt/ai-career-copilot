@@ -112,19 +112,61 @@ def get_rerank_config() -> dict:
     }
 
 
+def get_redis_config() -> dict:
+    """返回 Redis 配置（host, port, db, password）。"""
+    cfg = get_config().get("redis", {})
+    host = cfg.get("host", "")
+    if not host and cfg.get("host_from") == "server":
+        host = get_server_host()
+    return {
+        "host": host,
+        "port": cfg.get("port", 6379),
+        "db": cfg.get("db", 0),
+        "password": cfg.get("password", ""),
+    }
+
+
+def get_mysql_config() -> dict:
+    """返回 MySQL 配置（host, port, user, password, database, charset, pool_size）。"""
+    cfg = get_config().get("mysql", {})
+    host = cfg.get("host", "")
+    if not host and cfg.get("host_from") == "server":
+        host = get_server_host()
+    password_env = cfg.get("password_env", "")
+    return {
+        "host": host,
+        "port": cfg.get("port", 3306),
+        "user": cfg.get("user", "root"),
+        "password": _resolve_api_key(password_env) if password_env else cfg.get("password", ""),
+        "database": cfg.get("database", "ai_career_copilot"),
+        "charset": cfg.get("charset", "utf8mb4"),
+        "pool_size": cfg.get("pool_size", 5),
+    }
+
+
+def get_fastapi_config() -> dict:
+    """返回 FastAPI 配置（host, port, debug）。"""
+    cfg = get_config().get("fastapi", {})
+    return {
+        "host": cfg.get("host", "0.0.0.0"),
+        "port": cfg.get("port", 8000),
+        "debug": cfg.get("debug", False),
+    }
+
+
 def get_rag_config() -> dict:
     """返回 RAG 参数（chunk_size, chunk_overlap, search_top_k, rerank_top_n）。"""
-    return get_config()["rag"]
+    return get_config().get("rag", {})
 
 
 def get_vector_store_config() -> dict:
     """返回向量数据库配置（persist_directory）。"""
-    return get_config()["vector_store"]
+    return get_config().get("vector_store", {})
 
 
 def get_template_config() -> dict:
     """返回模板路径配置（default_md, default_tex）。"""
-    return get_config()["templates"]
+    return get_config().get("templates", {})
 
 
 def get_resume_config() -> dict:
@@ -138,4 +180,4 @@ def get_resume_config() -> dict:
 
 def get_output_config() -> dict:
     """返回输出目录配置（directory）。"""
-    return get_config()["output"]
+    return get_config().get("output", {})

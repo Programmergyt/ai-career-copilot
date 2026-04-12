@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="{{THEME_CLASS}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{NAME}} - {{TARGET_ROLE}}</title>
+    <style>
+        :root {
+            {{CSS_VARIABLES}}
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+            color: #333;
+            background: #fff;
+        }
+
+        .resume-container {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
+        }
+
+        .resume-container.dense .section {
+            margin-bottom: calc(12px * var(--spacing-scale));
+        }
+
+        .resume-container.dense .item {
+            margin-bottom: calc(6px * var(--spacing-scale));
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: calc(20px * var(--spacing-scale));
+        }
+
+        .section h2 {
+            font-size: calc(var(--font-size) * 1.2);
+            color: #1a1a1a;
+            border-bottom: 2px solid #333;
+            padding-bottom: 4px;
+            margin-bottom: calc(10px * var(--spacing-scale));
+        }
+
+        /* Profile */
+        .section-profile .profile-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .section-profile .name {
+            font-size: calc(var(--font-size) * 1.6);
+            font-weight: bold;
+        }
+
+        .section-profile .contact {
+            color: #555;
+            font-size: calc(var(--font-size) * 0.9);
+        }
+
+        .section-profile .github {
+            color: #0066cc;
+            font-size: calc(var(--font-size) * 0.9);
+        }
+
+        .education {
+            margin-top: 8px;
+        }
+
+        .edu-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+
+        .edu-school {
+            font-weight: 600;
+        }
+
+        .edu-detail {
+            color: #555;
+            font-size: calc(var(--font-size) * 0.9);
+        }
+
+        /* Items */
+        .item {
+            margin-bottom: calc(12px * var(--spacing-scale));
+        }
+
+        .item-title {
+            font-size: calc(var(--font-size) * 1.05);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .item-content {
+            color: #444;
+            white-space: pre-wrap;
+        }
+
+        /* Double column layout */
+        .double-column .section-skills {
+            column-count: 2;
+            column-gap: 24px;
+        }
+
+        /* Dark theme */
+        html.dark body {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        html.dark .section h2 {
+            color: #fff;
+            border-bottom-color: #888;
+        }
+
+        html.dark .item-content {
+            color: #ccc;
+        }
+
+        /* Print */
+        @media print {
+            body {
+                background: #fff;
+                color: #000;
+            }
+            .resume-container {
+                max-width: none;
+                padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="resume-container {{LAYOUT_CLASS}} {{DENSE_CLASS}}">
+        {{SECTIONS_HTML}}
+    </div>
+</body>
+</html>
