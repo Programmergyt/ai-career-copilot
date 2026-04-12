@@ -1,0 +1,4 @@
+- 参考docs内的设计文档，在项目中添加一个log文件夹，分类记录各类日志，并修改docs内的相关设计信息。
+- 完成第一阶段的MVP实现。
+- 注意数据库相关的配置都在test/test_connectivity.py中了，将其整理进storage文件夹后要同步修改config.yaml和config_loader.py,并把需要我执行的数据库建库与建表的幂等sql代码保存为sql类型文件放在sql文件夹中，我自己去服务器上执行。
+- 实现完后更新README，列出已完成的事项和未完成的事项。
