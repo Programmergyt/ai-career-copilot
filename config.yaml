@@ -1,39 +1,33 @@
 # AI Career Copilot 配置文件
 
+server:
+  host: "8.153.79.69"
+
 llm:
+  provider: "deepseek"
   model: "deepseek-chat"
   api_base: "https://api.deepseek.com"
-  api_key_env: "DEEPSEEK_API_KEY"        # 环境变量中的 API Key 名称
+  api_key_env: "DEEPSEEK_API_KEY"
   temperature: 0.3
   max_tokens: 8192
 
 embedding:
+  provider: "dashscope"
   model: "text-embedding-v4"
-  api_key_env: "DASHSCOPE_API_KEY"        # 环境变量中的 API Key 名称
+  api_base: "https://dashscope.aliyuncs.com/api/v1"
+  api_key_env: "DASHSCOPE_API_KEY"
 
 rerank:
+  provider: "dashscope"
   model: "gte-rerank-v2"
-  api_key_env: "DASHSCOPE_API_KEY"        # 环境变量中的 API Key 名称
+  api_base: "https://dashscope.aliyuncs.com/api/v1"
+  api_key_env: "DASHSCOPE_API_KEY"
   top_n: 5
 
 langsmith:
-  tracing_v2: true                      # 是否开启追踪
-  project: "ai-career-copilot"          # 项目名称
-  api_key_env: "LANGCHAIN_API_KEY"      # 引用环境变量名
+  tracing_v2: true
+  project: "ai-career-copilot"
+  api_key_env: "LANGCHAIN_API_KEY"
   endpoint: "https://api.smith.langchain.com"
 
-rag:
-  chunk_size: 512
-  chunk_overlap: 50
-  search_top_k: 20
-  rerank_top_n: 5
 
-vector_store:
-  persist_directory: "./data/chroma_db"
-
-output:
-  directory: "./output"
-
-templates:
-  default_md: "./templates/default.md"
-  default_tex: "./templates/default.tex"

@@ -51,34 +51,64 @@ def get_config() -> dict:
 # 各模块便捷配置访问
 # ------------------------------------------------------------------
 
-def get_llm_config() -> dict:
-    """返回 LLM 配置（model, api_base, api_key, temperature, max_tokens）。"""
-    cfg = get_config()["llm"]
+def get_server_config() -> dict:
+    """返回服务端连接配置（host）。"""
+    cfg = get_config().get("server", {})
     return {
+        "host": cfg.get("host", ""),
+    }
+
+
+def get_server_host() -> str:
+    """返回服务端 Host/IP。"""
+    return get_server_config()["host"]
+
+def get_llm_config() -> dict:
+    """返回 LLM 配置（provider, model, api_base, api_key, temperature, max_tokens）。"""
+    cfg = get_config()["llm"]
+    api_key_env = cfg.get("api_key_env", "")
+    return {
+        "provider": cfg.get("provider", "openai"),
         "model": cfg["model"],
-        "api_base": cfg["api_base"],
-        "api_key": _resolve_api_key(cfg["api_key_env"]),
+        "api_base": cfg.get("api_base", ""),
+        "api_key": _resolve_api_key(api_key_env) if api_key_env else "",
         "temperature": cfg.get("temperature", 0.3),
         "max_tokens": cfg.get("max_tokens", 4096),
+        "api_version": cfg.get("api_version", ""),
+        "deployment": cfg.get("deployment", ""),
+        "model_kwargs": cfg.get("model_kwargs", {}),
+        "timeout": cfg.get("timeout", None),
     }
 
 
 def get_embedding_config() -> dict:
-    """返回 Embedding 模型配置（model, api_key）。"""
+    """返回 Embedding 配置（provider, model, api_base, api_key）。"""
     cfg = get_config()["embedding"]
+    api_key_env = cfg.get("api_key_env", "")
     return {
+        "provider": cfg.get("provider", "dashscope"),
         "model": cfg["model"],
-        "api_key": _resolve_api_key(cfg["api_key_env"]),
+        "api_base": cfg.get("api_base", ""),
+        "api_key": _resolve_api_key(api_key_env) if api_key_env else "",
+        "api_version": cfg.get("api_version", ""),
+        "deployment": cfg.get("deployment", ""),
+        "dimensions": cfg.get("dimensions", None),
+        "model_kwargs": cfg.get("model_kwargs", {}),
     }
 
 
 def get_rerank_config() -> dict:
-    """返回 Rerank 模型配置（model, api_key, top_n）。"""
+    """返回 Rerank 配置（provider, model, api_base, api_key, top_n）。"""
     cfg = get_config()["rerank"]
+    api_key_env = cfg.get("api_key_env", "")
     return {
+        "provider": cfg.get("provider", "dashscope"),
         "model": cfg["model"],
-        "api_key": _resolve_api_key(cfg["api_key_env"]),
+        "api_base": cfg.get("api_base", ""),
+        "api_key": _resolve_api_key(api_key_env) if api_key_env else "",
         "top_n": cfg.get("top_n", 5),
+        "api_version": cfg.get("api_version", ""),
+        "model_kwargs": cfg.get("model_kwargs", {}),
     }
 
 
@@ -95,6 +125,15 @@ def get_vector_store_config() -> dict:
 def get_template_config() -> dict:
     """返回模板路径配置（default_md, default_tex）。"""
     return get_config()["templates"]
+
+
+def get_resume_config() -> dict:
+    """返回简历生成配置（max_internships, max_projects）。"""
+    cfg = get_config().get("resume", {})
+    return {
+        "max_internships": cfg.get("max_internships", 1),
+        "max_projects": cfg.get("max_projects", 1),
+    }
 
 
 def get_output_config() -> dict:
