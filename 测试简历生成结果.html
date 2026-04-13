@@ -1,0 +1,188 @@
+    <!DOCTYPE html> <html lang="zh-CN" class="light"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>郭奕廷 - AIGC工程师</title> <style> :root {--font-family: 'Source Han Sans', sans-serif;
+    --font-size: 14px;
+    --line-height: 1.5;
+    --margin-top: 24px;
+    --margin-right: 24px;
+    --margin-bottom: 24px;
+    --margin-left: 24px;
+    --spacing-scale: 1.0;
+
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: var(--font-family);
+        font-size: var(--font-size);
+        line-height: var(--line-height);
+        color: #333;
+        background: #fff;
+    }
+
+    .resume-container {
+        max-width: 210mm;
+        margin: 0 auto;
+        padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
+    }
+
+    .resume-container.dense .section {
+        margin-bottom: calc(12px * var(--spacing-scale));
+    }
+
+    .resume-container.dense .item {
+        margin-bottom: calc(6px * var(--spacing-scale));
+    }
+
+    /* Sections */
+    .section {
+        margin-bottom: calc(20px * var(--spacing-scale));
+    }
+
+    .section h2 {
+        font-size: calc(var(--font-size) * 1.2);
+        color: #1a1a1a;
+        border-bottom: 2px solid #333;
+        padding-bottom: 4px;
+        margin-bottom: calc(10px * var(--spacing-scale));
+    }
+
+    /* Profile */
+    .section-profile .profile-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: baseline;
+        margin-bottom: 8px;
+    }
+
+    .section-profile .name {
+        font-size: calc(var(--font-size) * 1.6);
+        font-weight: bold;
+    }
+
+    .section-profile .contact {
+        color: #555;
+        font-size: calc(var(--font-size) * 0.9);
+    }
+
+    .section-profile .github {
+        color: #0066cc;
+        font-size: calc(var(--font-size) * 0.9);
+    }
+
+    .education {
+        margin-top: 8px;
+    }
+
+    .edu-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 4px;
+    }
+
+    .edu-school {
+        font-weight: 600;
+    }
+
+    .edu-detail {
+        color: #555;
+        font-size: calc(var(--font-size) * 0.9);
+    }
+
+    /* Items */
+    .item {
+        margin-bottom: calc(12px * var(--spacing-scale));
+    }
+
+    .item-title {
+        font-size: calc(var(--font-size) * 1.05);
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .item-content {
+        color: #444;
+        white-space: pre-wrap;
+    }
+
+    /* Double column layout */
+    .double-column .section-skills {
+        column-count: 2;
+        column-gap: 24px;
+    }
+
+    /* Dark theme */
+    html.dark body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+    }
+
+    html.dark .section h2 {
+        color: #fff;
+        border-bottom-color: #888;
+    }
+
+    html.dark .item-content {
+        color: #ccc;
+    }
+
+    /* Print */
+    @media print {
+        body {
+            background: #fff;
+            color: #000;
+        }
+        .resume-container {
+            max-width: none;
+            padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
+        }
+    }
+</style>
+</head> <body> <div class="resume-container single-column "></div>
+            <section class="section section-profile">
+            <h2>基本信息</h2>
+            <div class="profile-info">
+                <span class="name">郭奕廷</span>
+                <span class="contact">2403508140@qq.com | +86-13585926126 | 上海</span>
+                <span class="github">https://github.com/guoyiting</span>
+            </div>
+            <div class="education"><div class="edu-item"><span class="edu-school">华东理工大学</span><span class="edu-detail">控制工程 · 硕士 · 2025-09 - 2028-06</span></div></div>
+        </section>
+    
+
+        <section class="section section-skills">
+            <h2>专业技能</h2>
+            <div class="item skill-item"><h3 class="item-title">Python / LangChain</h3><div class="item-content">熟练构建 RAG 工作流与工具链。</div></div>
+        </section>
+    
+
+        <section class="section section-projects">
+            <h2>项目经历</h2>
+            <div class="item project-item"><h3 class="item-title">AI Career Copilot</h3><div class="item-content">基于 LangGraph 的多 Agent 简历系统。</div></div>
+        </section>
+    
+
+        <section class="section section-internships">
+            <h2>实习经历</h2>
+            <div class="item internship-item"><h3 class="item-title">上海新华控制 — RAG 故障诊断</h3><div class="item-content">负责 RAG 检索与重排链路，提升诊断准确率。</div></div>
+        </section>
+    
+
+        <section class="section section-awards">
+            <h2>获奖经历</h2>
+            <div class="item award-item"><h3 class="item-title">华为杯二等奖</h3><div class="item-content">2025年研究生数学建模竞赛二等奖。</div></div>
+        </section>
+    
+
+        <section class="section section-summary">
+            <h2>个人总结</h2>
+            <p>聚焦 AIGC 与 RAG 的候选人，具备多 Agent 应用开发经验。</p>
+        </section>
+    
+</div>
+</body> </html>

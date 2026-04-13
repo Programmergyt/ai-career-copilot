@@ -10,6 +10,7 @@
 
 > **注意**：旧的 `requirements.txt` 是 UTF-16 编码，请删除后用 `requirements_new.txt` 替代：
 > ```bash
+> (D:\Anaconda\shell\condabin\conda-hook.ps1) ; (conda activate rag_workflow)
 > del requirements.txt
 > ren requirements_new.txt requirements.txt
 > pip install -r requirements.txt

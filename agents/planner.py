@@ -51,7 +51,7 @@ def _build_execution_plan(intent: str, state: CopilotState) -> list[str]:
         return ["jd_agent"]
 
     if intent == "upload_profile" and state.job is None:
-        # 没有 JD，跳过 content_agent（无法做针对性优化，但可以生成基础简历）
+        # 没有 JD，跳过 content_agent
         return ["profile_agent"]
 
     return list(base_plan)
