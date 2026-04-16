@@ -6,19 +6,19 @@
 
 ## 快速启动
 
+当前仓库采用前后端分离目录：后端代码、配置、模板、SQL 与测试均位于 `backend/`，前端代码位于 `frontend/`。
+
 ### 1. 安装依赖
 
-> **注意**：旧的 `requirements.txt` 是 UTF-16 编码，请删除后用 `requirements_new.txt` 替代：
-> ```bash
-> (D:\Anaconda\shell\condabin\conda-hook.ps1) ; (conda activate rag_workflow)
-> del requirements.txt
-> ren requirements_new.txt requirements.txt
-> pip install -r requirements.txt
-> ```
+```bash
+pip install -r backend/requirements.txt
+```
 
 ### 2. 配置环境变量
 
-在项目根目录创建 `.env` 文件：
+在 `backend/` 目录创建 `.env` 文件。
+
+`backend/config_loader.py` 会固定从 `backend/.env` 和 `backend/config.yaml` 读取配置，不依赖当前工作目录。
 
 ```env
 DEEPSEEK_API_KEY=your_deepseek_api_key
@@ -32,20 +32,44 @@ MYSQL_PASSWORD=Gyt2003@GYTsecure
 在 MySQL 服务器上执行 SQL 脚本：
 
 ```bash
-mysql -u root -p < sql/init_schema.sql
+mysql -u root -p < backend/sql/init_schema.sql
+```
+
+或直接执行初始化脚本：
+
+```bash
+python backend/sql/init_db.py
 ```
 
 该脚本是幂等的，可重复执行。它会创建 `ai_career_copilot` 数据库及所有表。
 
-### 4. 启动服务
+### 4. 启动后端服务
 
 ```bash
-python main.py
+python backend/main.py
 ```
 
 服务默认监听 `http://0.0.0.0:8000`。
 
-### 5. 测试 API
+### 5. 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端开发服务器默认运行在 `http://localhost:3000`，API 请求自动代理到后端 `http://localhost:8000`。
+
+生产构建：
+
+```bash
+cd frontend
+npm run build
+npm run preview
+```
+
+### 6. 测试 API
 
 ```bash
 # 健康检查
@@ -71,40 +95,38 @@ curl http://localhost:8000/api/resume/preview?session_id=xxx
 
 ```
 ai-career-copilot/
-├── main.py                    # FastAPI 入口
-├── config.yaml                # 全局配置
-├── config_loader.py           # 配置加载器
-├── log/                       # 日志模块（分类记录）
-│   ├── logger.py              # 日志配置
-│   ├── app.log                # 应用日志
-│   ├── agent.log              # Agent 日志
-│   ├── api.log                # API 日志
-│   ├── storage.log            # 存储日志
-│   └── error.log              # 错误汇总
-├── models/                    # LLM / Embedding / Rerank
-├── agents/                    # Agent 实现
-│   ├── planner.py             # 意图分类 + 执行调度
-│   ├── jd_agent.py            # JD 解析
-│   ├── profile_agent.py       # 候选人画像
-│   ├── content_agent.py       # 简历内容生成
-│   └── render_agent.py        # 简历渲染
-├── workflow/                  # LangGraph 状态与图编排
-│   ├── state.py               # 全局状态 Schema
-│   └── graph.py               # 图定义
-├── prompts/                   # Prompt 模板
-├── tools/                     # 工具（文件解析、模板渲染）
-├── templates/                 # HTML 简历模板
-├── storage/                   # 数据访问层
-│   ├── redis_client.py        # Redis 会话状态
-│   └── mysql_client.py        # MySQL 持久化
-├── api/                       # API 路由
-│   ├── chat.py                # POST /api/chat
-│   ├── resume.py              # GET/POST /api/resume/*
-│   └── export.py              # POST /api/export
-├── sql/                       # 数据库脚本
-│   └── init_schema.sql        # 建库建表（幂等）
-├── test/                      # 测试
-└── docs/                      # 设计文档
+├── backend/                   # 后端代码、配置、模板、SQL、测试
+│   ├── main.py                # FastAPI 入口
+│   ├── config.yaml            # 全局配置
+│   ├── config_loader.py       # 配置加载器
+│   ├── agents/                # Agent 实现
+│   ├── api/                   # API 路由
+│   ├── log/                   # 日志模块（分类记录）
+│   ├── models/                # LLM / Embedding / Rerank
+│   ├── prompts/               # Prompt 模板
+│   ├── sql/                   # 数据库脚本
+│   ├── storage/               # 数据访问层
+│   ├── templates/             # HTML 简历模板
+│   ├── test/                  # 后端测试
+│   ├── tools/                 # 工具（文件解析、模板渲染）
+│   └── workflow/              # LangGraph 状态与图编排
+├── docs/                      # 设计文档
+├── frontend/                  # 前端工程目录（Vue3 + Vite）
+│   ├── src/
+│   │   ├── api/               # 后端 API 封装
+│   │   ├── assets/            # 全局样式
+│   │   ├── components/        # 组件
+│   │   │   ├── ChatPanel.vue  # 左侧对话面板
+│   │   │   ├── ResultPanel.vue# 右侧结果面板（Tabs）
+│   │   │   └── tabs/          # 各 Tab 页组件
+│   │   ├── utils/             # 工具函数
+│   │   ├── App.vue            # 根组件
+│   │   └── main.js            # 入口
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+├── README.md
+└── 生成结果.html              # 示例输出
 ```
 
 ---
@@ -127,10 +149,10 @@ ai-career-copilot/
 
 ### ✅ 已完成（第一阶段 — 核心）
 
-- [x] **日志系统** — 分类日志（app/agent/api/storage/error），控制台+文件双输出
-- [x] **配置管理** — config.yaml + config_loader.py，支持 Redis/MySQL/FastAPI 配置
+- [x] **日志系统** — 分类日志（位于 `backend/log/`），控制台+文件双输出
+- [x] **配置管理** — `backend/config.yaml` + `backend/config_loader.py`，支持 Redis/MySQL/FastAPI 配置
 - [x] **数据库存储层** — Redis 会话状态管理 + MySQL 持久化存储（连接池）
-- [x] **SQL 脚本** — 幂等建库建表脚本 `sql/init_schema.sql`
+- [x] **SQL 脚本** — 幂等建库建表脚本 `backend/sql/init_schema.sql`
 - [x] **全局状态 Schema** — Pydantic 模型定义，覆盖所有状态字段
 - [x] **LangGraph 工作流** — 状态图编排，支持意图路由和条件分支
 - [x] **Planner Agent** — 意图分类（6 种意图）+ 执行计划生成 + 跳过逻辑
@@ -153,7 +175,7 @@ ai-career-copilot/
 - [ ] Interview Agent — 面试问答生成
 - [ ] 主动追问机制 — questions_to_ask 流转
 - [ ] 局部更新 diff 展示
-- [ ] 前端界面 (Vue3)
+- [ ] 前端界面 (`frontend/`，Vue3)
 
 ### 🔲 未完成（第三阶段）
 
@@ -179,3 +201,5 @@ ai-career-copilot/
 | 持久化存储 | MySQL 8.0+ |
 | 日志 | Python logging（分类文件输出）|
 | 配置 | PyYAML + python-dotenv |
+
+

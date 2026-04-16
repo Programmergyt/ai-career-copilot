@@ -31,80 +31,25 @@
 
 ```
 ai-career-copilot/
-├── main.py                    # FastAPI 入口
-├── config.yaml                # 全局配置
-├── config_loader.py           # 配置加载
-│
-├── log/                       # 日志模块
-│   ├── __init__.py            # 日志公共接口
-│   ├── logger.py              # 日志配置与分类
-│   ├── app.log                # 应用主日志
-│   ├── agent.log              # Agent 调用日志
-│   ├── api.log                # API 请求/响应日志
-│   ├── storage.log            # 数据库操作日志
-│   └── error.log              # ERROR 级别汇总日志
-│
-├── models/                    # LLM / Embedding / Rerank 工厂
-│   ├── llm.py
-│   ├── embedding.py
-│   └── rerank.py
-│
-├── agents/                    # Agent 实现
-│   ├── planner.py             # Planner Agent（含 Intent Classifier, State Diff Planner, Orchestrator）
-│   ├── jd_agent.py            # JD Agent
-│   ├── profile_agent.py       # Profile Agent
-│   ├── gap_agent.py           # Gap Analysis Agent
-│   ├── content_agent.py       # Resume Content Agent
-│   ├── render_agent.py        # Resume Render Agent
-│   └── interview_agent.py     # Interview Agent
-│
-├── workflow/
-│   ├── state.py               # LangGraph State 定义（Pydantic）
-│   └── graph.py               # LangGraph 图定义与编排
-│
-├── memory/
-│   ├── session_memory.py      # 会话内记忆（Redis）
-│   └── long_term_memory.py    # 跨会话记忆（MySQL，MVP 第三阶段）
-│
-├── rag/                       # RAG 检索
-│   ├── embeddings.py          # 兼容层
-│   ├── indexer.py
-│   └── retriever.py
-│
-├── tools/                     # 工具
-│   ├── file_parser.py         # 文件解析（PDF/DOCX/MD/TXT）
-│   ├── template_renderer.py   # HTML 模板渲染引擎
-│   ├── match_scorer.py        # 匹配度评分
-│   ├── export_service.py      # 导出服务（HTML/PDF/MD/JSON）
-│   └── vector_store.py        # 向量存储
-│
-├── prompts/                   # Prompt 模板
-│   ├── intent_classification.py
-│   ├── jd_analysis.py
-│   ├── profile_extraction.py
-│   ├── gap_analysis.py
-│   ├── resume_generation.py
-│   ├── render_instruction.py
-│   └── interview_qa.py
-│
-├── templates/                 # HTML 简历模板
-│   └── default.html
-│
-├── storage/                   # 数据访问层
-│   ├── redis_client.py        # Redis 连接与操作
-│   └── mysql_client.py        # MySQL 连接与操作
-│
-├── api/                       # API 路由
-│   ├── chat.py                # POST /api/chat
-│   ├── resume.py              # GET/POST /api/resume/*
-│   └── export.py              # POST /api/export
-│
-├── ui/                        # 前端（Vue3，独立构建）
-│   └── app.py                 # 开发期临时前端
-│
-├── tests/                     # 测试
-├── docs/                      # 文档
-└── data/                      # 运行时数据
+├── backend/                   # 后端工程根目录
+│   ├── main.py                # FastAPI 入口
+│   ├── config.yaml            # 全局配置
+│   ├── config_loader.py       # 配置加载
+│   ├── agents/                # Agent 实现
+│   ├── api/                   # API 路由
+│   ├── log/                   # 日志模块
+│   ├── models/                # LLM / Embedding / Rerank 工厂
+│   ├── prompts/               # Prompt 模板
+│   ├── sql/                   # 数据库初始化脚本
+│   ├── storage/               # 数据访问层
+│   ├── templates/             # HTML 简历模板
+│   ├── test/                  # 后端测试
+│   ├── tools/                 # 文件解析与模板渲染工具
+│   └── workflow/              # LangGraph 状态与图编排
+├── frontend/                  # 前端工程目录（Vue3）
+├── docs/                      # 设计与需求文档
+├── README.md
+└── 生成结果.html              # 本地生成示例
 ```
 
 ---
@@ -411,7 +356,7 @@ CREATE TABLE conversation_events (
 ```python
 from log import setup_logging, get_logger
 
-setup_logging()  # 在 main.py 入口调用一次
+setup_logging()  # 在 backend/main.py 入口调用一次
 logger = get_logger("agent")  # 在各模块中获取分类 logger
 logger.info("JD Agent started for session %s", session_id)
 ```
