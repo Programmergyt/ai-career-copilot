@@ -16,12 +16,12 @@ logger = get_logger("agent")
 
 # Intent → 执行链路
 _INTENT_PLAN: dict[str, list[str]] = {
-    "upload_jd": ["jd_agent", "content_agent", "render_agent"],
-    "upload_profile": ["profile_agent", "content_agent", "render_agent"],
+    "upload_jd": ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"],
+    "upload_profile": ["profile_agent", "content_agent", "render_agent", "interview_agent"],
     "content_edit": ["content_agent", "render_agent"],
     "render_edit": ["render_agent"],
     "export": [],
-    "ask_question": [],
+    "ask_question": ["gap_agent"],
 }
 
 
@@ -49,10 +49,6 @@ def _build_execution_plan(intent: str, state: CopilotState) -> list[str]:
     if intent == "upload_jd" and state.candidate_profile is None:
         # 没有候选人数据，不能生成简历
         return ["jd_agent"]
-
-    if intent == "upload_profile" and state.job is None:
-        # 没有 JD，跳过 content_agent
-        return ["profile_agent"]
 
     return list(base_plan)
 

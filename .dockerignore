@@ -1,0 +1,14 @@
+.git
+.gitignore
+.pytest_cache
+.vscode
+__pycache__/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.DS_Store
+**/node_modules
+frontend/dist
+backend/.env
+.env.docker

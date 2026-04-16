@@ -156,6 +156,60 @@ class PromptRouterLLM:
                 "last_render_reason": "按用户要求调整为双栏布局",
             }, ensure_ascii=False))
 
+        if "能力缺口分析专家" in text:
+            return _FakeResponse(json.dumps({
+                "gaps": [
+                    {
+                        "id": "gap_1",
+                        "type": "missing_skill",
+                        "severity": "high",
+                        "description": "缺少 RAG 实战经验",
+                        "related_section_ids": ["projects"],
+                        "resolved": False,
+                        "resolution_source": "gap_analysis",
+                    }
+                ],
+                "questions_to_ask": [
+                    {
+                        "id": "q_1",
+                        "question": "你是否参与过 RAG 项目的开发？",
+                        "reason": "补充项目经验细节",
+                        "target_field": "projects",
+                        "priority": "high",
+                        "status": "pending",
+                        "answer_ref": "",
+                    }
+                ]
+            }, ensure_ascii=False))
+
+        if "面试准备专家" in text:
+            return _FakeResponse(json.dumps([
+                {
+                    "id": "qa_1",
+                    "category": "technical",
+                    "question": "请介绍你在 RAG 项目中的角色和技术架构。",
+                    "answer": "我负责构建检索-生成闭环，并使用 LangChain 与 Chroma 实现高效向量检索。",
+                    "source_refs": ["projects"],
+                    "version": 1,
+                },
+                {
+                    "id": "qa_2",
+                    "category": "project_deep_dive",
+                    "question": "这个项目如何保证模型输出的准确性？",
+                    "answer": "通过检索结果预过滤、Prompt 设计与后处理规则，显著降低了 hallucination 风险。",
+                    "source_refs": ["projects"],
+                    "version": 1,
+                },
+                {
+                    "id": "qa_3",
+                    "category": "behavioral",
+                    "question": "你在团队协作中如何处理需求变更？",
+                    "answer": "我会及时与产品和研发对齐，拆解风险并调整迭代优先级。",
+                    "source_refs": [],
+                    "version": 1,
+                }
+            ], ensure_ascii=False))
+
         return _FakeResponse(json.dumps({"intent": "ask_question", "reason": "fallback"}, ensure_ascii=False))
 
 
@@ -164,14 +218,18 @@ def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     import agents.planner as planner
     import agents.jd_agent as jd_agent
     import agents.profile_agent as profile_agent
+    import agents.gap_agent as gap_agent
     import agents.content_agent as content_agent
     import agents.render_agent as render_agent
+    import agents.interview_agent as interview_agent
 
     monkeypatch.setattr(planner, "get_llm", lambda: llm)
     monkeypatch.setattr(jd_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(profile_agent, "get_llm", lambda: llm)
+    monkeypatch.setattr(gap_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(content_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(render_agent, "get_llm", lambda: llm)
+    monkeypatch.setattr(interview_agent, "get_llm", lambda: llm)
 
 
 def ensure_langsmith_enabled() -> str | None:

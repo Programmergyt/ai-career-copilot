@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>郭奕廷 - 生成式AI实习开发工程师</title>
+    <title>郭奕廷 - AIGC工程师（实习生）</title>
     <style>
         :root {
             
@@ -169,35 +169,36 @@
 
             <section class="section section-skills">
                 <h2>专业技能</h2>
-                <div class="item skill-item"><h3 class="item-title">编程语言与AI开发</h3><div class="item-content">Python（熟练）：精通NumPy/Pandas进行数据分析，使用Flask构建微服务；掌握PyTorch/Scikit-learn构建机器学习模型，具备LLM本地化部署与应用开发经验。熟悉TypeScript/JavaScript、Java及Spring Boot后端开发。</div></div>
-<div class="item skill-item"><h3 class="item-title">生成式AI与LLM工程</h3><div class="item-content">熟练运用LangChain框架与RAG技术开发AI应用。具备构建高级RAG管道、设计Agentic工作流的实践经验，熟悉AI辅助开发工作流以加速原型开发与调试。</div></div>
-<div class="item skill-item"><h3 class="item-title">数据与系统</h3><div class="item-content">熟练使用MySQL、Doris等关系型数据库进行表结构设计、数据查询与性能优化。熟悉Linux开发环境与Git团队协作流程。</div></div>
-<div class="item skill-item"><h3 class="item-title">软技能</h3><div class="item-content">具备强烈的主动性、好奇心与目标导向。注重细节与质量，拥有结构化、自我组织的工作风格。优秀的团队合作与跨文化沟通能力（英语六级578分），能适应快节奏的敏捷开发环境。</div></div>
+                <div class="item skill-item"><h3 class="item-title">生成式AI与机器学习</h3><div class="item-content">掌握生成式AI技术应用，具备LLM本地化部署与RAG系统开发经验。熟悉PyTorch/Scikit-learn机器学习框架。</div></div>
+<div class="item skill-item"><h3 class="item-title">编程语言与AI辅助开发</h3><div class="item-content">精通Python，熟练使用NumPy/Pandas进行数据分析，Flask构建微服务。熟悉TypeScript/JavaScript、Java。掌握AI辅助开发工作流，能高效进行原型开发与调试。</div></div>
+<div class="item skill-item"><h3 class="item-title">RAG与LLM工程架构</h3><div class="item-content">熟练运用LangChain，具备构建高级RAG管道的实战经验，包括Query处理（清洗、扩展、Multi Query）、混合检索（BM25+向量）、结果重排及基于置信度的答案生成。</div></div>
+<div class="item skill-item"><h3 class="item-title">数据库与系统</h3><div class="item-content">熟练使用MySQL、Doris等关系型数据库，具备表结构设计与性能优化经验。熟悉Linux开发环境及Git团队协作流程。</div></div>
+<div class="item skill-item"><h3 class="item-title">软技能与语言</h3><div class="item-content">具备强烈的主动性、好奇心与注重细节的工作风格。拥有良好的团队协作能力，能适应国际化与敏捷环境。英语六级578分，具备优秀的英文文档阅读与书写能力。</div></div>
             </section>
         
 
             <section class="section section-projects">
                 <h2>项目经历</h2>
-                <div class="item project-item"><h3 class="item-title">AI Career Copilot — 基于多Agent协作的智能求职辅助系统</h3><div class="item-content">背景：为解决求职中简历与岗位匹配度低、面试准备不充分的问题，独立设计并开发了此系统。职责：作为核心开发者，使用LangGraph构建了包含11个节点的多Agent工作流。技术：采用Python、LangChain、ChromaDB，集成DeepSeek与DashScope API，实现了RAG检索、Embedding Recall与Cross-Encoder Rerank。成果：系统能自动完成JD深度结构化分析、基于个人材料的定制化简历生成（含Reflection自检机制）以及防守型面试Q&A生成，形成了从输入到输出的完整、可追溯的自动化求职辅助流程。</div></div>
+                <div class="item project-item"><h3 class="item-title">AI Career Copilot：基于LangGraph的多Agent智能求职辅助系统</h3><div class="item-content">作为项目负责人，开发一个通过多Agent协作自动化完成从岗位分析到简历生成与面试准备的智能求职系统。设计并实现包含11个节点的LangGraph状态图工作流，涵盖JD结构化分析、多向量库RAG检索、分板块简历生成、Reflection自检与面试问答生成。创新采用“每段经历独立向量库”的RAG架构，结合Embedding召回与Cross-Encoder重排序，精准匹配JD要求与个人经历。实现基于LLM的Reflection自检机制，自动评估生成简历对JD的覆盖度，确保输出质量。项目具备高度可配置性与可扩展性，支持模型热切换与全链路追踪。</div></div>
             </section>
         
 
             <section class="section section-internships">
                 <h2>实习经历</h2>
-                <div class="item internship-item"><h3 class="item-title">上海新华控制信息公司 — 软件开发实习生（2025.11 - 2026.03）</h3><div class="item-content">情境：参与工业设备故障诊断问答系统开发，需从海量非结构化文档中精准检索故障信息。任务：负责核心RAG流程的设计、实现与性能优化。行动：构建了包含关键词清洗、规则引擎整合、Query Expansion及Multi Query的复杂查询处理流程；设计了融合硬过滤、BM25与向量混合检索、重排序的RAG检索流程；集成规则引擎判断并设计了基于置信度的回答生成与存储机制。结果：系统性地定义了Faithfulness、Recall@5等关键性能指标及提升目标，并通过更换Embedding模型、优化Chunk策略、改进查询改写等方案，为后续性能大幅提升奠定了基础。</div></div>
+                <div class="item internship-item"><h3 class="item-title">上海新华控制信息公司 — 软件开发实习生（2025.11 - 2026.03）</h3><div class="item-content">为工业故障诊断场景独立开发基于RAG的LLM智能问答系统。负责从数据预处理、知识库构建到检索与生成的全流程设计与实现。构建关键词与向量数据库，设计语义段落切分与双层Chunk策略。设计复杂Query处理流程，集成规则引擎实现清洗、扩展及Multi Query。实现混合检索（BM25+向量）并应用HyDE、重排等技术优化。针对初期检索精度低的问题，主导优化方案，包括更换embedding模型、改进chunking策略、引入查询改写，成功交付完整RAG工作流并制定明确性能优化目标。</div></div>
             </section>
         
 
             <section class="section section-awards">
                 <h2>获奖经历</h2>
-                <div class="item award-item"><h3 class="item-title">华为杯研究生数学建模竞赛 二等奖</h3><div class="item-content">2025年参与并获得国家级二等奖，展现了出色的数学建模、问题分析与团队协作能力。</div></div>
-<div class="item award-item"><h3 class="item-title">校级奖学金（2次）</h3><div class="item-content">在本科及硕士阶段因学业表现优异，两次获得校级奖学金。</div></div>
+                <div class="item award-item"><h3 class="item-title">华为杯研究生数学建模竞赛二等奖</h3><div class="item-content">2025年</div></div>
+<div class="item award-item"><h3 class="item-title">校级奖学金（2次）</h3><div class="item-content"></div></div>
             </section>
         
 
             <section class="section section-summary">
                 <h2>个人总结</h2>
-                <p>华东理工大学人工智能与控制工程背景的硕士生，对生成式AI技术充满热情，具备扎实的机器学习与LLM应用开发经验。在实习与个人项目中，成功运用Python、LangChain及RAG等技术构建了AI驱动的智能系统，展现了解决复杂问题、快速原型开发及团队协作的能力。渴望在SAP CTO Research & Innovation团队中，将AI技术应用于企业级挑战，并实现创新价值。</p>
+                <p>华东理工大学人工智能专业硕士在读，具备扎实的生成式AI与机器学习理论基础。拥有工业级RAG系统全流程开发经验，熟练掌握Python、LLM应用开发及AI辅助开发工作流。对探索AI原生软件、解决企业级业务挑战充满热情，渴望在SAP的国际化团队中贡献技术专长并快速成长。</p>
             </section>
         
     </div>

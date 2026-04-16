@@ -16,6 +16,23 @@ _dotenv: dict | None = None
 _BACKEND_DIR = Path(__file__).resolve().parent
 
 
+def _resolve_env_override(env_var_name: str, default: str = "") -> str:
+    """解析通用环境变量覆盖：优先 .env 文件，其次系统环境变量。"""
+    dotenv = _get_dotenv()
+    return dotenv.get(env_var_name) or os.environ.get(env_var_name, default)
+
+
+def _resolve_int_override(env_var_name: str, default: int) -> int:
+    """解析整型环境变量覆盖，无效值时回退默认值。"""
+    raw = _resolve_env_override(env_var_name, "")
+    if raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _get_dotenv() -> dict:
     """加载 backend/.env 文件内容（缓存），与当前工作目录无关。"""
     global _dotenv
@@ -56,7 +73,7 @@ def get_server_config() -> dict:
     """返回服务端连接配置（host）。"""
     cfg = get_config().get("server", {})
     return {
-        "host": cfg.get("host", ""),
+        "host": _resolve_env_override("SERVER_HOST", cfg.get("host", "")),
     }
 
 
@@ -120,10 +137,10 @@ def get_redis_config() -> dict:
     if not host and cfg.get("host_from") == "server":
         host = get_server_host()
     return {
-        "host": host,
-        "port": cfg.get("port", 6379),
-        "db": cfg.get("db", 0),
-        "password": cfg.get("password", ""),
+        "host": _resolve_env_override("REDIS_HOST", host),
+        "port": _resolve_int_override("REDIS_PORT", cfg.get("port", 6379)),
+        "db": _resolve_int_override("REDIS_DB", cfg.get("db", 0)),
+        "password": _resolve_env_override("REDIS_PASSWORD", cfg.get("password", "")),
     }
 
 
@@ -135,13 +152,16 @@ def get_mysql_config() -> dict:
         host = get_server_host()
     password_env = cfg.get("password_env", "")
     return {
-        "host": host,
-        "port": cfg.get("port", 3306),
-        "user": cfg.get("user", "root"),
-        "password": _resolve_api_key(password_env) if password_env else cfg.get("password", ""),
-        "database": cfg.get("database", "ai_career_copilot"),
-        "charset": cfg.get("charset", "utf8mb4"),
-        "pool_size": cfg.get("pool_size", 5),
+        "host": _resolve_env_override("MYSQL_HOST", host),
+        "port": _resolve_int_override("MYSQL_PORT", cfg.get("port", 3306)),
+        "user": _resolve_env_override("MYSQL_USER", cfg.get("user", "root")),
+        "password": _resolve_env_override(
+            "MYSQL_PASSWORD",
+            _resolve_api_key(password_env) if password_env else cfg.get("password", ""),
+        ),
+        "database": _resolve_env_override("MYSQL_DATABASE", cfg.get("database", "ai_career_copilot")),
+        "charset": _resolve_env_override("MYSQL_CHARSET", cfg.get("charset", "utf8mb4")),
+        "pool_size": _resolve_int_override("MYSQL_POOL_SIZE", cfg.get("pool_size", 5)),
     }
 
 
@@ -149,9 +169,9 @@ def get_fastapi_config() -> dict:
     """返回 FastAPI 配置（host, port, debug）。"""
     cfg = get_config().get("fastapi", {})
     return {
-        "host": cfg.get("host", "0.0.0.0"),
-        "port": cfg.get("port", 8000),
-        "debug": cfg.get("debug", False),
+        "host": _resolve_env_override("FASTAPI_HOST", cfg.get("host", "0.0.0.0")),
+        "port": _resolve_int_override("FASTAPI_PORT", cfg.get("port", 8000)),
+        "debug": _resolve_env_override("FASTAPI_DEBUG", str(cfg.get("debug", False))).lower() in {"1", "true", "yes", "on"},
     }
 
 

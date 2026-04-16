@@ -8,6 +8,73 @@
 
 当前仓库采用前后端分离目录：后端代码、配置、模板、SQL 与测试均位于 `backend/`，前端代码位于 `frontend/`。
 
+### Docker 部署
+
+适用于一键启动 `frontend + backend + MySQL + Redis` 的完整环境。
+
+#### 1. 准备 Docker 环境变量
+
+在项目根目录复制 Docker 环境变量模板：
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+PowerShell 可用：
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+```
+
+至少补充以下变量：
+
+```env
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DASHSCOPE_API_KEY=your_dashscope_api_key
+LANGCHAIN_API_KEY=your_langchain_api_key
+MYSQL_ROOT_PASSWORD=change_me
+MYSQL_DATABASE=ai_career_copilot
+```
+
+说明：
+
+- `backend/config_loader.py` 现在支持通过环境变量覆盖 MySQL / Redis / FastAPI 地址，因此 Docker 内会自动连接 `mysql` 和 `redis` 服务，而不会继续使用 `backend/config.yaml` 中的公网 IP。
+
+#### 2. 构建并启动容器
+
+```bash
+docker compose --env-file .env.docker up --build -d
+```
+
+启动后：
+
+- 前端访问：`http://localhost:3000`
+- 后端健康检查：`http://localhost:8000/health`
+- MySQL：`localhost:3306`
+- Redis：`localhost:6379`
+
+首次启动时，`backend` 容器会自动执行 `python sql/init_db.py` 初始化数据库表结构。
+
+#### 3. 查看运行状态
+
+```bash
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+#### 4. 停止并清理
+
+```bash
+docker compose down
+```
+
+如果需要同时清理数据库和 Redis 持久化数据卷：
+
+```bash
+docker compose down -v
+```
+
 ### 1. 安装依赖
 
 ```bash
@@ -110,6 +177,13 @@ ai-career-copilot/
 │   ├── test/                  # 后端测试
 │   ├── tools/                 # 工具（文件解析、模板渲染）
 │   └── workflow/              # LangGraph 状态与图编排
+├── docker/                    # Docker 构建与 Nginx 代理配置
+│   ├── backend/
+│   │   ├── Dockerfile
+│   │   └── entrypoint.sh
+│   └── frontend/
+│       ├── Dockerfile
+│       └── nginx.conf
 ├── docs/                      # 设计文档
 ├── frontend/                  # 前端工程目录（Vue3 + Vite）
 │   ├── src/
@@ -125,6 +199,8 @@ ai-career-copilot/
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
+├── docker-compose.yml
+├── .env.docker.example
 ├── README.md
 └── 生成结果.html              # 示例输出
 ```

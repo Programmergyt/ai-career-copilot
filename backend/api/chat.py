@@ -138,3 +138,11 @@ def _persist_to_mysql(state: CopilotState) -> None:
             state.resume_html.derived_from_render_version,
             state.resume_html.checksum,
         )
+
+    if state.interview_qa:
+        interview_id = f"interview_{state.session_id}"
+        db.save_interview_qa(
+            interview_id, state.session_id,
+            {"interview_qa": [qa.model_dump() for qa in state.interview_qa]},
+            len(state.interview_qa),
+        )
