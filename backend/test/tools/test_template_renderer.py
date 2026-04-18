@@ -12,18 +12,18 @@ from workflow.state import (
 
 @pytest.fixture
 def sample_resume_content() -> ResumeContent:
-    """基于 fixtures/profiles/基本信息样例.md 构造的简历内容。"""
+    """基于 fixtures/profiles/虚拟候选人信息.md 构造的简历内容。"""
     return ResumeContent(
         profile=ResumeProfile(
-            name="郭奕廷",
-            email="2403508140@qq.com",
-            phone="+86-13585926126",
-            city="上海",
-            github="https://github.com/guoyiting",
+            name="林知遥",
+            email="lin.zhiyou@example.test",
+            phone="+86-13900001234",
+            city="杭州",
+            github="https://github.com/linzhiyou-demo",
             education=[
                 Education(
                     id="edu_1",
-                    school="华东理工大学",
+                    school="星海理工大学",
                     major="控制工程",
                     degree="硕士",
                     start_date="2025-09",
@@ -31,7 +31,7 @@ def sample_resume_content() -> ResumeContent:
                 ),
                 Education(
                     id="edu_2",
-                    school="华东理工大学",
+                    school="星海理工大学",
                     major="人工智能",
                     degree="本科",
                     start_date="2021-09",
@@ -47,7 +47,7 @@ def sample_resume_content() -> ResumeContent:
         internships=[
             SectionItem(
                 id="int1",
-                title="上海新华控制 — RAG 故障诊断系统",
+                title="远望工业智能 — RAG 诊断平台",
                 content="基于 RAG 的 LLM 工作流，实现工业设备故障诊断。",
             ),
         ],
@@ -59,7 +59,7 @@ def sample_resume_content() -> ResumeContent:
             ),
         ],
         awards=[
-            SectionItem(id="aw1", title="华为杯", content="获得2025年华为杯研究生数学建模竞赛二等奖"),
+            SectionItem(id="aw1", title="启明星创新奖学金", content="获得校级创新奖学金与项目实践奖励"),
         ],
         meta=ResumeContentMeta(target_role="AIGC工程师", version=1),
     )
@@ -80,7 +80,7 @@ class TestRenderResumeHTML:
 
     def test_html_contains_name(self, sample_resume_content, default_render_config):
         html = render_resume_html(sample_resume_content, default_render_config)
-        assert "郭奕廷" in html
+        assert "林知遥" in html
 
     def test_html_contains_sections(self, sample_resume_content, default_render_config):
         html = render_resume_html(sample_resume_content, default_render_config)
@@ -90,12 +90,12 @@ class TestRenderResumeHTML:
 
     def test_html_contains_education(self, sample_resume_content, default_render_config):
         html = render_resume_html(sample_resume_content, default_render_config)
-        assert "华东理工大学" in html
+        assert "星海理工大学" in html
         assert "控制工程" in html
 
     def test_html_contains_awards(self, sample_resume_content, default_render_config):
         html = render_resume_html(sample_resume_content, default_render_config)
-        assert "华为杯" in html
+        assert "启明星创新奖学金" in html
 
 
 class TestBuildTemplateVariables:
@@ -110,7 +110,7 @@ class TestBuildTemplateVariables:
 
     def test_name_in_variables(self, sample_resume_content, default_render_config):
         variables = _build_template_variables(sample_resume_content, default_render_config)
-        assert variables["NAME"] == "郭奕廷"
+        assert variables["NAME"] == "林知遥"
         assert variables["TARGET_ROLE"] == "AIGC工程师"
 
     def test_layout_class_single_column(self, sample_resume_content, default_render_config):
@@ -134,7 +134,7 @@ class TestRenderConfigEffects:
     def test_visibility_map_hides_section(self, sample_resume_content):
         config = RenderConfig(visibility_map={"awards": False})
         html = render_resume_html(sample_resume_content, config)
-        assert "华为杯" not in html
+        assert "启明星创新奖学金" not in html
 
     def test_custom_section_order(self, sample_resume_content):
         config = RenderConfig(

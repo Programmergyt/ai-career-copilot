@@ -13,23 +13,23 @@ class TestParseMarkdownFiles:
     """使用 fixtures 目录下的 .md 文件测试解析功能。"""
 
     def test_parse_jd_file(self):
-        jd_path = FIXTURES_DIR / "jds" / "SAP_AIGC工程师.md"
+        jd_path = FIXTURES_DIR / "jds" / "通用AIGC实习JD.md"
         text = parse_file(jd_path)
         assert isinstance(text, str)
         assert len(text) > 0
-        assert "SAP" in text
+        assert "NovaWorks" in text
         assert "Generative AI" in text or "GenAI" in text
 
     def test_parse_profile_file(self):
-        profile_path = FIXTURES_DIR / "profiles" / "基本信息样例.md"
+        profile_path = FIXTURES_DIR / "profiles" / "虚拟候选人信息.md"
         text = parse_file(profile_path)
         assert isinstance(text, str)
         assert len(text) > 0
-        assert "郭奕廷" in text
-        assert "华东理工大学" in text or "华东理⼯⼤学" in text
+        assert "林知遥" in text
+        assert "星海理工大学" in text
 
     def test_parse_internship_file(self):
-        intern_path = FIXTURES_DIR / "internships" / "新华实习——RAG故障诊断全流程.md"
+        intern_path = FIXTURES_DIR / "internships" / "远望工业智能实习——RAG诊断平台.md"
         text = parse_file(intern_path)
         assert isinstance(text, str)
         assert len(text) > 0

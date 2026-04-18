@@ -107,11 +107,11 @@ class TestCandidateProfileCRUD:
     def test_save_and_get_profile(self, db, session_id):
         profile_data = {
             "profile_basic": {
-                "name": "郭奕廷",
-                "email": "2403508140@qq.com",
-                "phone": "+86-13585926126",
-                "city": "上海",
-                "school": "华东理工大学",
+                "name": "林知遥",
+                "email": "lin.zhiyou@example.test",
+                "phone": "+86-13900001234",
+                "city": "杭州",
+                "school": "星海理工大学",
             },
             "facts": [
                 {"id": "f1", "type": "skill", "content": "Python"},
@@ -122,7 +122,7 @@ class TestCandidateProfileCRUD:
         db.save_candidate_profile(profile_id, session_id, profile_data)
         result = db.get_candidate_profile(session_id)
         assert result is not None
-        assert result["profile_basic"]["name"] == "郭奕廷"
+        assert result["profile_basic"]["name"] == "林知遥"
         assert len(result["facts"]) == 2
 
 
@@ -130,7 +130,7 @@ class TestResumeContentCRUD:
 
     def test_save_and_get_resume_content(self, db, session_id):
         content_data = {
-            "profile": {"name": "郭奕廷"},
+            "profile": {"name": "林知遥"},
             "summary": "AI方向研究生",
             "skills": [{"id": "s1", "title": "Python", "content": "熟练"}],
         }
@@ -138,7 +138,7 @@ class TestResumeContentCRUD:
         db.save_resume_content(content_id, session_id, content_data, version=1, content_hash="abc123")
         result = db.get_resume_content(session_id)
         assert result is not None
-        assert result["profile"]["name"] == "郭奕廷"
+        assert result["profile"]["name"] == "林知遥"
 
 
 class TestRenderConfigCRUD:

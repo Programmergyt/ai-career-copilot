@@ -10,7 +10,7 @@
 
 ### Docker 部署
 
-适用于一键启动 `frontend + backend + MySQL + Redis` 的完整环境。
+适用于在 Ubuntu 服务器上启动当前项目的 `frontend + backend`，并复用服务器上已经运行的 MySQL / Redis 容器。
 
 #### 1. 准备 Docker 环境变量
 
@@ -32,13 +32,26 @@ Copy-Item .env.docker.example .env.docker
 DEEPSEEK_API_KEY=your_deepseek_api_key
 DASHSCOPE_API_KEY=your_dashscope_api_key
 LANGCHAIN_API_KEY=your_langchain_api_key
-MYSQL_ROOT_PASSWORD=change_me
+MYSQL_HOST=host.docker.internal
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=change_me
 MYSQL_DATABASE=ai_career_copilot
+REDIS_HOST=host.docker.internal
+REDIS_PORT=6379
+REDIS_DB=0
+BACKEND_PORT=8000
+FRONTEND_PORT=3001
 ```
 
 说明：
 
-- `backend/config_loader.py` 现在支持通过环境变量覆盖 MySQL / Redis / FastAPI 地址，因此 Docker 内会自动连接 `mysql` 和 `redis` 服务，而不会继续使用 `backend/config.yaml` 中的公网 IP。
+- `backend/config_loader.py` 支持通过环境变量覆盖 MySQL / Redis / FastAPI 地址，所以 Docker 部署时不会使用 `backend/config.yaml` 中的默认地址，而是直接使用 `.env.docker` 中的连接信息。
+- 当前 `docker-compose.yml` 不再创建 MySQL / Redis 容器，而是通过宿主机已暴露的 `3306/6379` 端口复用服务器上已存在的数据库容器。
+- 在 Ubuntu Docker 主机上，`MYSQL_HOST` 和 `REDIS_HOST` 推荐使用 `host.docker.internal`。compose 已通过 `extra_hosts` 映射 `host-gateway`，容器可通过该别名访问宿主机已发布端口。
+- 如果目标服务器上的 `host.docker.internal` 无法解析，可把 `.env.docker` 中的 `MYSQL_HOST` 和 `REDIS_HOST` 直接改为服务器 IP `8.153.79.69`。
+- 当前项目 Docker 前端默认对外端口为 `3001`，用来与服务器上已有的 `80` 端口前端容器区分。
+- 由于开发机是 Windows、部署机是 Ubuntu，前端镜像构建时会在 Linux 容器内重新执行 `npm ci`，不会复用本地 `frontend/node_modules`。
 
 #### 2. 构建并启动容器
 
@@ -48,12 +61,12 @@ docker compose --env-file .env.docker up --build -d
 
 启动后：
 
-- 前端访问：`http://localhost:3000`
-- 后端健康检查：`http://localhost:8000/health`
-- MySQL：`localhost:3306`
-- Redis：`localhost:6379`
+- 前端访问：`http://<服务器IP>:3001`
+- 后端健康检查：`http://<服务器IP>:8000/health`
+- MySQL：复用宿主机已有的 `3306` 端口
+- Redis：复用宿主机已有的 `6379` 端口
 
-首次启动时，`backend` 容器会自动执行 `python sql/init_db.py` 初始化数据库表结构。
+首次启动时，`backend` 容器会自动执行 `python sql/init_db.py` 初始化数据库表结构。该脚本是幂等的，因此可在复用现有 MySQL 容器时重复执行；前提是你提供的数据库账号对目标库具有建表/改表权限。
 
 #### 3. 查看运行状态
 
@@ -69,11 +82,7 @@ docker compose logs -f frontend
 docker compose down
 ```
 
-如果需要同时清理数据库和 Redis 持久化数据卷：
-
-```bash
-docker compose down -v
-```
+当前 compose 不管理 MySQL / Redis 容器和数据卷，因此 `docker compose down` 只会停止当前项目的前后端容器，不会影响另一个项目已经在运行的数据库容器。
 
 ### 1. 安装依赖
 

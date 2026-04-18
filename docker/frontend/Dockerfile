@@ -3,7 +3,8 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY frontend/package.json ./package.json
-RUN npm install
+COPY frontend/package-lock.json ./package-lock.json
+RUN npm ci
 
 COPY frontend ./
 RUN npm run build

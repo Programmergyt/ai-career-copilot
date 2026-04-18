@@ -89,12 +89,12 @@ def _real_llm_guard() -> None:
 
 @pytest.fixture(scope="module")
 def fixture_jd_text() -> str:
-    return read_fixture_text("jds", "SAP_AIGC工程师.md")
+    return read_fixture_text("jds", "通用AIGC实习JD.md")
 
 
 @pytest.fixture(scope="module")
 def fixture_profile_text() -> str:
-    return read_fixture_text("profiles", "基本信息样例.md")
+    return read_fixture_text("profiles", "虚拟候选人信息.md")
 
 
 @pytest.fixture(scope="module")
@@ -104,7 +104,7 @@ def fixture_project_text() -> str:
 
 @pytest.fixture(scope="module")
 def fixture_internship_text() -> str:
-    return read_fixture_text("internships", "新华实习——RAG故障诊断全流程.md")
+    return read_fixture_text("internships", "远望工业智能实习——RAG诊断平台.md")
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +127,7 @@ def test_planner_node_recognizes_upload_jd_with_real_llm(fixture_jd_text: str) -
     state = CopilotState(
         session_id=_session_id("int_planner_jd"),
         user_message=fixture_jd_text,
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
     )
 
     # 真实 LLM 在这里负责意图分类与执行计划生成。
@@ -187,7 +187,7 @@ def test_profile_node_extracts_candidate_profile_with_real_llm(combined_profile_
     updates = profile_node(state)
     profile = updates["candidate_profile"]
 
-    assert profile.profile_basic.name == "郭奕廷"
+    assert profile.profile_basic.name == "林知遥"
     assert len(profile.materials) == 1
     assert profile.facts
     assert any(fact.type in {"skill", "project", "internship", "award"} for fact in profile.facts)
@@ -225,7 +225,7 @@ def test_content_node_generates_resume_content_with_real_llm(
 
     assert result_state.resume_content_json is not None
     assert result_state.resume_content_json.meta.target_role == job.title
-    assert result_state.resume_content_json.profile.name == "郭奕廷"
+    assert result_state.resume_content_json.profile.name == "林知遥"
     _assert_has_substantive_resume_sections(result_state)
 
 
@@ -268,7 +268,7 @@ def test_render_node_renders_html_with_real_llm(
 
     assert final_state.render_config.layout_mode == "double-column"
     assert "<html" in final_state.resume_html.html.lower()
-    assert "郭奕廷" in final_state.resume_html.html
+    assert "林知遥" in final_state.resume_html.html
     assert final_state.meta.active_html_version >= 1
 
 

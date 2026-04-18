@@ -30,12 +30,12 @@ def _langsmith_monitoring():
 
 @pytest.fixture
 def fixture_jd_text() -> str:
-    return read_fixture_text("jds", "SAP_AIGC工程师.md")
+    return read_fixture_text("jds", "通用AIGC实习JD.md")
 
 
 @pytest.fixture
 def fixture_profile_text() -> str:
-    return read_fixture_text("profiles", "基本信息样例.md")
+    return read_fixture_text("profiles", "虚拟候选人信息.md")
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
     state = CopilotState(
         session_id="sess_planner_jd",
         user_message=fixture_jd_text,
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
     )
 
     updates = planner_node(state)
@@ -95,7 +95,7 @@ def test_profile_node_updates_candidate_profile(monkeypatch, fixture_profile_tex
     updates = profile_node(state)
 
     profile = updates["candidate_profile"]
-    assert profile.profile_basic.name == "郭奕廷"
+    assert profile.profile_basic.name == "林知遥"
     assert len(profile.materials) == 1
     assert len(profile.facts) >= 2
 
@@ -108,7 +108,7 @@ def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
         session_id="sess_gap",
         user_message=fixture_jd_text,
         job=Job(id="job_1", title="AIGC工程师", source=fixture_jd_text),
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
     )
     updates = gap_node(state)
 
@@ -123,14 +123,14 @@ def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fix
 
     resume_content = ResumeContent(
         profile=ResumeProfile(
-            name="郭奕廷",
-            email="2403508140@qq.com",
+            name="林知遥",
+            email="lin.zhiyou@example.test",
             phone="12345678901",
-            city="上海",
+            city="杭州",
             education=[
                 Education(
                     id="edu_1",
-                    school="华东理工大学",
+                    school="星海理工大学",
                     major="控制工程",
                     degree="硕士",
                     start_date="2025-09",
@@ -151,7 +151,7 @@ def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fix
     state = CopilotState(
         session_id="sess_interview",
         job=Job(id="job_1", title="AIGC工程师", source=fixture_jd_text),
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
         resume_content_json=resume_content,
     )
     updates = interview_node(state)
@@ -169,7 +169,7 @@ def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fi
         current_intent="upload_jd",
         user_message=fixture_jd_text,
         job=Job(id="job_1", title="AIGC工程师", source=fixture_jd_text),
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
     )
 
     content_updates = content_node(state)

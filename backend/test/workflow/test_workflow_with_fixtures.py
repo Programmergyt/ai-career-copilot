@@ -26,12 +26,12 @@ def _langsmith_monitoring():
 
 @pytest.fixture
 def fixture_jd_text() -> str:
-    return read_fixture_text("jds", "SAP_AIGC工程师.md")
+    return read_fixture_text("jds", "通用AIGC实习JD.md")
 
 
 @pytest.fixture
 def fixture_profile_text() -> str:
-    return read_fixture_text("profiles", "基本信息样例.md")
+    return read_fixture_text("profiles", "虚拟候选人信息.md")
 
 
 def test_workflow_upload_jd_runs_to_render(monkeypatch, fixture_jd_text):
@@ -51,7 +51,7 @@ def test_workflow_upload_jd_runs_to_render(monkeypatch, fixture_jd_text):
     state = CopilotState(
         session_id="sess_wf_jd",
         user_message=fixture_jd_text,
-        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="郭奕廷")),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
     )
 
     # 输入由两部分组成：
@@ -99,7 +99,7 @@ def test_workflow_upload_profile_runs_to_render(monkeypatch, fixture_jd_text, fi
 
     assert final_state.current_intent == "upload_profile"
     assert final_state.candidate_profile is not None
-    assert final_state.candidate_profile.profile_basic.name == "郭奕廷"
+    assert final_state.candidate_profile.profile_basic.name == "林知遥"
     assert final_state.resume_content_json is not None
     assert final_state.resume_html.html
     assert "profile_agent" in final_state.triggered_agents

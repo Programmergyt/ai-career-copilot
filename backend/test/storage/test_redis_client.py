@@ -41,7 +41,7 @@ class TestStateCRUD:
         state = {
             "session_id": store.session_id,
             "job": {"title": "AIGC工程师", "tech_stack": ["Python"]},
-            "candidate_profile": {"profile_basic": {"name": "郭奕廷"}},
+            "candidate_profile": {"profile_basic": {"name": "林知遥"}},
         }
         store.save_state(state)
         loaded = store.load_state()

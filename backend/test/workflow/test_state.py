@@ -61,11 +61,11 @@ class TestCandidateProfile:
     def test_profile_creation(self):
         profile = CandidateProfile(
             profile_basic=ProfileBasic(
-                name="郭奕廷",
-                email="2403508140@qq.com",
-                phone="+86-13585926126",
-                city="上海",
-                school="华东理工大学",
+                name="林知遥",
+                email="lin.zhiyou@example.test",
+                phone="+86-13900001234",
+                city="杭州",
+                school="星海理工大学",
             ),
             materials=[
                 Material(
@@ -80,7 +80,7 @@ class TestCandidateProfile:
                 Fact(id="f2", type="skill", content="LangChain"),
             ],
         )
-        assert profile.profile_basic.name == "郭奕廷"
+        assert profile.profile_basic.name == "林知遥"
         assert len(profile.materials) == 1
         assert len(profile.facts) == 2
 
@@ -90,14 +90,14 @@ class TestResumeContent:
     def test_resume_content_creation(self):
         content = ResumeContent(
             profile=ResumeProfile(
-                name="郭奕廷",
+                name="林知遥",
                 email="test@test.com",
                 phone="123",
-                city="上海",
+                city="杭州",
                 education=[
                     Education(
                         id="edu_1",
-                        school="华东理工大学",
+                        school="星海理工大学",
                         major="控制工程",
                         degree="硕士",
                         start_date="2025-09",
@@ -111,7 +111,7 @@ class TestResumeContent:
             ],
             meta=ResumeContentMeta(target_role="AIGC工程师", version=1),
         )
-        assert content.profile.name == "郭奕廷"
+        assert content.profile.name == "林知遥"
         assert len(content.profile.education) == 1
         assert len(content.skills) == 1
         assert content.meta.target_role == "AIGC工程师"

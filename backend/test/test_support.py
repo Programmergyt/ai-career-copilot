@@ -56,11 +56,11 @@ class PromptRouterLLM:
         if "候选人画像构建专家" in text:
             return _FakeResponse(json.dumps({
                 "profile_basic": {
-                    "name": "郭奕廷",
-                    "email": "2403508140@qq.com",
-                    "phone": "+86-13585926126",
-                    "city": "上海",
-                    "school": "华东理工大学",
+                    "name": "林知遥",
+                    "email": "lin.zhiyou@example.test",
+                    "phone": "+86-13900001234",
+                    "city": "杭州",
+                    "school": "星海理工大学",
                 },
                 "facts": [
                     {
@@ -83,15 +83,15 @@ class PromptRouterLLM:
         if "简历内容生成专家" in text or "简历内容编辑专家" in text:
             return _FakeResponse(json.dumps({
                 "profile": {
-                    "name": "郭奕廷",
-                    "email": "2403508140@qq.com",
-                    "phone": "+86-13585926126",
-                    "city": "上海",
-                    "github": "https://github.com/guoyiting",
+                    "name": "林知遥",
+                    "email": "lin.zhiyou@example.test",
+                    "phone": "+86-13900001234",
+                    "city": "杭州",
+                    "github": "https://github.com/linzhiyou-demo",
                     "education": [
                         {
                             "id": "edu_1",
-                            "school": "华东理工大学",
+                            "school": "星海理工大学",
                             "major": "控制工程",
                             "degree": "硕士",
                             "start_date": "2025-09",
@@ -112,7 +112,7 @@ class PromptRouterLLM:
                 "internships": [
                     {
                         "id": "intern_1",
-                        "title": "上海新华控制 — RAG 故障诊断",
+                        "title": "远望工业智能 — RAG 诊断平台",
                         "content": "负责 RAG 检索与重排链路，提升诊断准确率。",
                         "source_refs": [],
                         "updated_at": "",
@@ -130,8 +130,8 @@ class PromptRouterLLM:
                 "awards": [
                     {
                         "id": "award_1",
-                        "title": "华为杯二等奖",
-                        "content": "2025年研究生数学建模竞赛二等奖。",
+                        "title": "启明星创新奖学金",
+                        "content": "获得校级创新奖学金与项目实践奖励。",
                         "source_refs": [],
                         "updated_at": "",
                     }
