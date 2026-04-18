@@ -11,7 +11,7 @@ logger = get_logger("app")
 
 _SUPPORTED_UPLOAD_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
 
-
+# 解析4种文件：pdf、docx、md、txt。对于API上传的内容，支持根据filename后缀解析bytes数据。
 def parse_file(file_path: str | Path) -> str:
     """解析文件内容为纯文本/Markdown。"""
     path = Path(file_path)

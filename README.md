@@ -1,133 +1,167 @@
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 # AI Career Copilot
 
-基于多轮对话、结构化状态管理与记忆机制的多 Agent 求职辅助系统，覆盖岗位理解、候选人画像构建、简历内容生成、简历渲染、面试准备全流程。
+![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![LangGraph](https://img.shields.io/badge/Workflow-LangGraph-1C3C3C?style=flat-square)
+![Vue 3](https://img.shields.io/badge/Frontend-Vue_3-42B883?style=flat-square&logo=vuedotjs&logoColor=white)
+![MySQL](https://img.shields.io/badge/Database-MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/Cache-Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Deploy-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 
----
+An AI-powered multi-agent web app for job description analysis, candidate profile extraction, resume generation, HTML resume rendering, gap analysis, and interview Q&A preparation.
 
-## 快速启动
+The project is already deployed and publicly accessible at [http://8.153.79.69:3001](http://8.153.79.69:3001). If you want to try the full workflow before setting up locally, open the live site and start with a JD upload to see the multi-agent pipeline in action.
 
-当前仓库采用前后端分离目录：后端代码、配置、模板、SQL 与测试均位于 `backend/`，前端代码位于 `frontend/`。
+## Features
 
-### Docker 部署
+- Multi-turn workflow for JD input, profile input, resume generation, and follow-up editing.
+- Agent-based orchestration with LangGraph for planner, JD analysis, profile extraction, gap analysis, content generation, rendering, and interview preparation.
+- Structured resume content generation with HTML preview and export endpoints.
+- Resume rendering controls exposed through chat-driven render instructions.
+- Gap analysis to surface capability mismatches between a target role and candidate materials.
+- Interview Q&A generation based on the current role and resume context.
+- Web UI built with Vue 3 for chat interaction and result tabs.
+- Redis-backed session state plus MySQL persistence for key workflow artifacts.
 
-适用于在 Ubuntu 服务器上启动当前项目的 `frontend + backend`，并复用服务器上已经运行的 MySQL / Redis 容器。
+## Demo
 
-#### 1. 准备 Docker 环境变量
+Hosted demo: [http://8.153.79.69:3001](http://8.153.79.69:3001)
 
-在项目根目录复制 Docker 环境变量模板：
+You can experience the product as an end user: upload a target JD first, then continue the same conversation with your profile, internship notes, project materials, or follow-up revision requests. The system keeps the current session context and updates the generated results incrementally.
 
-```bash
-cp .env.docker.example .env.docker
+### JD Analysis
+
+The workflow starts from the target role. After a JD is pasted or uploaded, the system extracts responsibilities, keywords, and role expectations that will drive downstream resume generation and interview preparation.
+
+![JD analysis demo](./assets/JD_Analysis_Demo.png)
+
+### Resume Generation
+
+Once candidate materials are provided, the content and rendering agents collaborate to generate a structured resume preview that can be refined through natural-language follow-up instructions.
+
+![Resume generation demo](./assets/Resume_Generation_Demo.png)
+
+### Gap Analysis
+
+The gap analysis panel highlights what is missing, weak, or unsupported compared with the JD, helping users identify where they should add evidence or clarify experience.
+
+![Gap analysis demo](./assets/Gap_Analysis_Demo.png)
+
+### Mock Interview
+
+The interview panel turns the current role and generated resume context into likely interview questions, making it easier to prepare around the exact target position.
+
+![Mock interview demo](./assets/Mock_Interview_Demo.png)
+
+### Debug View
+
+For development and inspection, the debug panel exposes intermediate artifacts such as structured content, render config, and triggered agents in the current session.
+
+![Debug panel demo](./assets/Debug_Demo.png)
+
+## Try It Online
+
+The hosted instance at [http://8.153.79.69:3001](http://8.153.79.69:3001) is the fastest way to evaluate the product experience. It is especially useful if you want to validate the multi-turn workflow, inspect the result tabs, or see how resume edits and missing-information prompts behave before cloning the repository.
+
+If you want the source code or plan to contribute, visit the GitHub repository: [https://github.com/Programmergyt/ai-career-copilot](https://github.com/Programmergyt/ai-career-copilot).
+
+## Project Structure
+
+```text
+ai-career-copilot/
+├── backend/           # FastAPI app, agents, workflow, storage, prompts, tests
+├── frontend/          # Vue 3 + Vite web client
+├── docker/            # Dockerfiles and Nginx config for frontend/backend
+├── docs/              # Design and planning documents
+├── docker-compose.yml
+└── README*.md
 ```
 
-PowerShell 可用：
+## Tech Stack
 
-```powershell
-Copy-Item .env.docker.example .env.docker
-```
+| Layer | Stack |
+| --- | --- |
+| Backend API | FastAPI, Uvicorn |
+| Agent orchestration | LangGraph |
+| LLM integration | LangChain, DeepSeek |
+| Embedding / rerank | DashScope |
+| Frontend | Vue 3, Vite, Axios |
+| Session store | Redis |
+| Persistence | MySQL |
+| Configuration | PyYAML, python-dotenv |
+| Testing | pytest |
 
-至少补充以下变量：
+## Quick Start
 
-```env
-DEEPSEEK_API_KEY=your_deepseek_api_key
-DASHSCOPE_API_KEY=your_dashscope_api_key
-LANGCHAIN_API_KEY=your_langchain_api_key
-MYSQL_HOST=host.docker.internal
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=change_me
-MYSQL_DATABASE=ai_career_copilot
-REDIS_HOST=host.docker.internal
-REDIS_PORT=6379
-REDIS_DB=0
-BACKEND_PORT=8000
-FRONTEND_PORT=3001
-```
+The current recommended setup for new users is local development.
 
-说明：
+The repository already includes Dockerfiles and a Compose file for the frontend and backend services, but the current Compose setup expects reachable MySQL and Redis instances rather than provisioning a complete one-command stack.
 
-- `backend/config_loader.py` 支持通过环境变量覆盖 MySQL / Redis / FastAPI 地址，所以 Docker 部署时不会使用 `backend/config.yaml` 中的默认地址，而是直接使用 `.env.docker` 中的连接信息。
-- 当前 `docker-compose.yml` 不再创建 MySQL / Redis 容器，而是通过宿主机已暴露的 `3306/6379` 端口复用服务器上已存在的数据库容器。
-- 在 Ubuntu Docker 主机上，`MYSQL_HOST` 和 `REDIS_HOST` 推荐使用 `host.docker.internal`。compose 已通过 `extra_hosts` 映射 `host-gateway`，容器可通过该别名访问宿主机已发布端口。
-- 如果目标服务器上的 `host.docker.internal` 无法解析，可把 `.env.docker` 中的 `MYSQL_HOST` 和 `REDIS_HOST` 直接改为服务器 IP `8.153.79.69`。
-- 当前项目 Docker 前端默认对外端口为 `3001`，用来与服务器上已有的 `80` 端口前端容器区分。
-- 由于开发机是 Windows、部署机是 Ubuntu，前端镜像构建时会在 Linux 容器内重新执行 `npm ci`，不会复用本地 `frontend/node_modules`。
+### Prerequisites
 
-#### 2. 构建并启动容器
+- Python 3.11+
+- Node.js 18+
+- MySQL 8+
+- Redis 6+
+- API keys for the configured model providers
 
-```bash
-docker compose --env-file .env.docker up --build -d
-```
-
-启动后：
-
-- 前端访问：`http://<服务器IP>:3001`
-- 后端健康检查：`http://<服务器IP>:8000/health`
-- MySQL：复用宿主机已有的 `3306` 端口
-- Redis：复用宿主机已有的 `6379` 端口
-
-首次启动时，`backend` 容器会自动执行 `python sql/init_db.py` 初始化数据库表结构。该脚本是幂等的，因此可在复用现有 MySQL 容器时重复执行；前提是你提供的数据库账号对目标库具有建表/改表权限。
-
-#### 3. 查看运行状态
-
-```bash
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f frontend
-```
-
-#### 4. 停止并清理
-
-```bash
-docker compose down
-```
-
-当前 compose 不管理 MySQL / Redis 容器和数据卷，因此 `docker compose down` 只会停止当前项目的前后端容器，不会影响另一个项目已经在运行的数据库容器。
-
-### 1. 安装依赖
+### 1. Install backend dependencies
 
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-### 2. 配置环境变量
+### 2. Create backend environment variables
 
-在 `backend/` 目录创建 `.env` 文件。
-
-`backend/config_loader.py` 会固定从 `backend/.env` 和 `backend/config.yaml` 读取配置，不依赖当前工作目录。
+Create `backend/.env`.
 
 ```env
 DEEPSEEK_API_KEY=your_deepseek_api_key
 DASHSCOPE_API_KEY=your_dashscope_api_key
 LANGCHAIN_API_KEY=your_langchain_api_key
-MYSQL_PASSWORD=Gyt2003@GYTsecure
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=change_me
+MYSQL_DATABASE=ai_career_copilot
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_DB=0
+FASTAPI_HOST=0.0.0.0
+FASTAPI_PORT=8000
+FASTAPI_DEBUG=true
 ```
 
-### 3. 初始化数据库
+`backend/config_loader.py` reads `backend/.env` and lets environment variables override the defaults from `backend/config.yaml`.
 
-在 MySQL 服务器上执行 SQL 脚本：
+### 3. Initialize the database
+
+Run the SQL schema manually:
 
 ```bash
 mysql -u root -p < backend/sql/init_schema.sql
 ```
 
-或直接执行初始化脚本：
+Or use the initialization script:
 
 ```bash
 python backend/sql/init_db.py
 ```
 
-该脚本是幂等的，可重复执行。它会创建 `ai_career_copilot` 数据库及所有表。
-
-### 4. 启动后端服务
+### 4. Start the backend
 
 ```bash
 python backend/main.py
 ```
 
-服务默认监听 `http://0.0.0.0:8000`。
+Backend health check:
 
-### 5. 启动前端
+```bash
+curl http://localhost:8000/health
+```
+
+### 5. Start the frontend
 
 ```bash
 cd frontend
@@ -135,156 +169,66 @@ npm install
 npm run dev
 ```
 
-前端开发服务器默认运行在 `http://localhost:3000`，API 请求自动代理到后端 `http://localhost:8000`。
+The Vite dev server runs on `http://localhost:3000` and proxies API requests to the backend.
 
-生产构建：
-
-```bash
-cd frontend
-npm run build
-npm run preview
-```
-
-### 6. 测试 API
+### 6. Try the main workflow
 
 ```bash
-# 健康检查
-curl http://localhost:8000/health
-
-# 上传 JD
 curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "你的JD内容..."}'
-
-# 上传个人材料
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "返回的session_id", "message": "你的个人信息..."}'
-
-# 预览简历 HTML
-curl http://localhost:8000/api/resume/preview?session_id=xxx
+  -d '{"message": "Paste a job description here"}'
 ```
 
----
+Then continue the same session with candidate materials, and preview the generated resume HTML with:
 
-## 项目结构
-
-```
-ai-career-copilot/
-├── backend/                   # 后端代码、配置、模板、SQL、测试
-│   ├── main.py                # FastAPI 入口
-│   ├── config.yaml            # 全局配置
-│   ├── config_loader.py       # 配置加载器
-│   ├── agents/                # Agent 实现
-│   ├── api/                   # API 路由
-│   ├── log/                   # 日志模块（分类记录）
-│   ├── models/                # LLM / Embedding / Rerank
-│   ├── prompts/               # Prompt 模板
-│   ├── sql/                   # 数据库脚本
-│   ├── storage/               # 数据访问层
-│   ├── templates/             # HTML 简历模板
-│   ├── test/                  # 后端测试
-│   ├── tools/                 # 工具（文件解析、模板渲染）
-│   └── workflow/              # LangGraph 状态与图编排
-├── docker/                    # Docker 构建与 Nginx 代理配置
-│   ├── backend/
-│   │   ├── Dockerfile
-│   │   └── entrypoint.sh
-│   └── frontend/
-│       ├── Dockerfile
-│       └── nginx.conf
-├── docs/                      # 设计文档
-├── frontend/                  # 前端工程目录（Vue3 + Vite）
-│   ├── src/
-│   │   ├── api/               # 后端 API 封装
-│   │   ├── assets/            # 全局样式
-│   │   ├── components/        # 组件
-│   │   │   ├── ChatPanel.vue  # 左侧对话面板
-│   │   │   ├── ResultPanel.vue# 右侧结果面板（Tabs）
-│   │   │   └── tabs/          # 各 Tab 页组件
-│   │   ├── utils/             # 工具函数
-│   │   ├── App.vue            # 根组件
-│   │   └── main.js            # 入口
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── docker-compose.yml
-├── .env.docker.example
-├── README.md
-└── 生成结果.html              # 示例输出
+```bash
+curl "http://localhost:8000/api/resume/preview?session_id=YOUR_SESSION_ID"
 ```
 
----
+## Configuration
 
-## API 接口
+### Model and API configuration
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/health` | 健康检查 |
-| POST | `/api/chat` | 主对话接口（JD上传/材料上传/内容编辑/渲染编辑）|
-| GET | `/api/resume/content?session_id=` | 获取简历内容 JSON |
-| GET | `/api/resume/html?session_id=` | 获取简历 HTML 数据 |
-| GET | `/api/resume/preview?session_id=` | 浏览器预览简历 HTML |
-| POST | `/api/resume/render` | 渲染指令接口 |
-| POST | `/api/export` | 导出简历（html/json）|
+- LLM defaults are defined in `backend/config.yaml`.
+- API keys are loaded from `backend/.env` or process environment variables.
+- The current backend configuration references DeepSeek for chat completion and DashScope for embeddings and reranking.
 
----
+### Storage configuration
 
-## MVP 进度
+- Redis is used for session state.
+- MySQL is used for persistent storage of sessions, job data, profile data, resume content, render config, resume HTML, and interview output.
+- All major MySQL and Redis connection fields can be overridden with environment variables.
 
-### ✅ 已完成（第一阶段 — 核心）
+### Docker note
 
-- [x] **日志系统** — 分类日志（位于 `backend/log/`），控制台+文件双输出
-- [x] **配置管理** — `backend/config.yaml` + `backend/config_loader.py`，支持 Redis/MySQL/FastAPI 配置
-- [x] **数据库存储层** — Redis 会话状态管理 + MySQL 持久化存储（连接池）
-- [x] **SQL 脚本** — 幂等建库建表脚本 `backend/sql/init_schema.sql`
-- [x] **全局状态 Schema** — Pydantic 模型定义，覆盖所有状态字段
-- [x] **LangGraph 工作流** — 状态图编排，支持意图路由和条件分支
-- [x] **Planner Agent** — 意图分类（6 种意图）+ 执行计划生成 + 跳过逻辑
-- [x] **JD Agent** — JD 解析，输出结构化 Job
-- [x] **Profile Agent** — 候选人材料解析，增量合并画像
-- [x] **Resume Content Agent** — 简历内容 JSON 生成/局部更新
-- [x] **Resume Render Agent** — 渲染配置管理 + HTML 生成
-- [x] **Prompt 模板** — 意图分类/JD分析/画像提取/简历生成/渲染指令
-- [x] **HTML 简历模板** — 支持主题/布局/字号/行距/边距自定义
-- [x] **文件解析工具** — PDF / DOCX / Markdown / TXT 解析
-- [x] **API 路由** — chat / resume / export 接口
-- [x] **FastAPI 入口** — CORS 支持，自动重载
-- [x] **对话输入** — POST /api/chat 接口
-- [x] **实时预览** — GET /api/resume/preview 接口
-- [x] **内容指令/渲染指令路由** — Planner Agent 自动分类
+- `docker-compose.yml` currently starts the application services, but it does not provision MySQL or Redis for public users.
+- If you want a fully self-contained public deployment workflow, treat that as future work rather than a supported one-click path today.
 
-### 🔲 未完成（第二阶段）
+## Roadmap
 
-- [ ] Gap Analysis Agent — 能力缺口分析
-- [ ] Interview Agent — 面试问答生成
-- [ ] 主动追问机制 — questions_to_ask 流转
-- [ ] 局部更新 diff 展示
-- [ ] 前端界面 (`frontend/`，Vue3)
+- Improve the follow-up question flow for incomplete candidate input.
+- Add clearer diff views for partial resume updates.
+- Support cross-session memory and user preferences.
+- Add more resume templates and section-level rendering control.
+- Expand export formats, especially Markdown and PDF.
+- Add retrieval-enhanced workflows where they improve job matching and editing quality.
 
-### 🔲 未完成（第三阶段）
+## Contributing
 
-- [ ] 跨会话记忆（MySQL 持久化用户偏好）
-- [ ] 多模板支持
-- [ ] Section 级渲染控制
-- [ ] HTML → PDF 精细导出（WeasyPrint）
-- [ ] Markdown 导出
-- [ ] RAG 检索增强
+Issues and pull requests are welcome.
 
----
+If you plan to contribute code, a good starting point is:
 
-## 技术栈
+1. Run the backend and frontend locally.
+2. Review the documents in `docs/` for workflow and state design.
+3. Add or update tests under `backend/test/` for behavior changes.
 
-| 层 | 技术 |
-|----|------|
-| 后端框架 | FastAPI |
-| Agent 编排 | LangGraph |
-| LLM | DeepSeek (deepseek-chat) via LangChain |
-| Embedding | DashScope (text-embedding-v4) |
-| Rerank | DashScope (gte-rerank-v2) |
-| 会话存储 | Redis |
-| 持久化存储 | MySQL 8.0+ |
-| 日志 | Python logging（分类文件输出）|
-| 配置 | PyYAML + python-dotenv |
+## License
+
+TODO: no license file is currently included in the repository. Add a `LICENSE` file before treating the project as a standard open source distribution.
+
+## Support
+
+If this project helps you, please consider giving it a star.
 
 

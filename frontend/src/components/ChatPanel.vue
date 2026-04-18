@@ -11,7 +11,7 @@
         <p>开始对话吧！你可以：</p>
         <ul>
           <li>粘贴或上传 JD（岗位描述）</li>
-          <li>上传个人材料（简历/项目文档）</li>
+          <li>上传个人材料（PDF / DOCX / TXT / MD）</li>
           <li>输入个人信息补充</li>
         </ul>
       </div>
@@ -62,7 +62,7 @@
           <input
             type="file"
             multiple
-            accept=".pdf,.docx,.doc,.txt,.md"
+            accept=".pdf,.docx,.txt,.md"
             @change="onFileSelect"
             style="display:none"
           />

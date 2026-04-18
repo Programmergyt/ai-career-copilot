@@ -13,6 +13,9 @@
     </div>
 
     <div class="tab-content">
+      <!-- 项目介绍 -->
+      <ProjectIntro v-if="activeTab === 'intro'" />
+
       <!-- 岗位分析 -->
       <JobAnalysis v-if="activeTab === 'job'" :job="job" :gaps="gaps" />
 
@@ -43,6 +46,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import ProjectIntro from './tabs/ProjectIntro.vue'
 import JobAnalysis from './tabs/JobAnalysis.vue'
 import ResumePreview from './tabs/ResumePreview.vue'
 import GapsPanel from './tabs/GapsPanel.vue'
@@ -64,6 +68,7 @@ const props = defineProps({
 const activeTab = ref('job')
 
 const tabs = computed(() => [
+  { key: 'intro', label: '项目介绍', icon: '✨', badge: '' },
   { key: 'job', label: '岗位分析', icon: '📋', badge: props.job ? '' : '' },
   { key: 'resume', label: '简历预览', icon: '📄', badge: '' },
   {

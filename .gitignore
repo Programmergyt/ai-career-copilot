@@ -9,5 +9,8 @@ output/
 data/
 
 .env
+.env.*
+!.env.docker.example
 
 node_modules/
+docs/private-deployment-notes.md
