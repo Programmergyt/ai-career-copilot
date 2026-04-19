@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from models.llm import get_llm, parse_json_response
+from agents.json_contracts import JDAnalysisOutput
+from models.llm import get_llm, invoke_json_with_schema
 from prompts.jd_analysis import JD_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Job
 from log import get_logger
@@ -22,9 +23,13 @@ def jd_node(state: CopilotState) -> dict[str, Any]:
 
     prompt = JD_ANALYSIS_PROMPT.format(jd_text=jd_text)
     llm = get_llm()
-    response = llm.invoke(prompt)
-    content = getattr(response, "content", str(response))
-    parsed = parse_json_response(content)
+    try:
+        parsed = invoke_json_with_schema(llm, prompt, JDAnalysisOutput, logger, "JD Agent")
+    except RuntimeError as exc:
+        logger.error("JD Agent failed: %s", exc)
+        return {
+            "reply_message": "岗位解析失败：模型输出格式异常，请重试。",
+        }
 
     now = datetime.now(timezone.utc).isoformat()
     job_id = f"job_{uuid.uuid4().hex[:12]}"
@@ -37,17 +42,17 @@ def jd_node(state: CopilotState) -> dict[str, Any]:
         source=jd_text,
         parsed_at=now,
         version=version,
-        industry=parsed.get("industry", ""),
-        title=parsed.get("title", ""),
-        tech_stack=parsed.get("tech_stack", []),
-        keywords=parsed.get("keywords", []),
-        hard_skills=parsed.get("hard_skills", []),
-        soft_skills=parsed.get("soft_skills", []),
-        responsibilities=parsed.get("responsibilities", []),
-        education_requirement=parsed.get("education_requirement", ""),
-        experience_requirement=parsed.get("experience_requirement", ""),
-        implicit_preferences=parsed.get("implicit_preferences", []),
-        bonus_items=parsed.get("bonus_items", []),
+        industry=parsed.industry,
+        title=parsed.title,
+        tech_stack=parsed.tech_stack,
+        keywords=parsed.keywords,
+        hard_skills=parsed.hard_skills,
+        soft_skills=parsed.soft_skills,
+        responsibilities=parsed.responsibilities,
+        education_requirement=parsed.education_requirement,
+        experience_requirement=parsed.experience_requirement,
+        implicit_preferences=parsed.implicit_preferences,
+        bonus_items=parsed.bonus_items,
     )
 
     logger.info("JD parsed: %s (v%d)", job.title, job.version)

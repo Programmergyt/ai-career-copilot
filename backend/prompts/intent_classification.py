@@ -18,6 +18,12 @@ INTENT_CLASSIFICATION_PROMPT = """你是一个意图分类器。根据用户的�
 用户消息：
 {user_message}
 
-请只返回一个 JSON 对象，格式如下：
+机器协议：
+- 返回且仅返回一个合法 JSON 对象
+- 不要输出 Markdown、代码块、注释或额外说明
+- 所有 key 必须使用双引号
+- 若无法判断，也必须返回合法 JSON
+
+返回格式如下：
 {{"intent": "<意图名称>", "reason": "<简要理由>"}}
 """

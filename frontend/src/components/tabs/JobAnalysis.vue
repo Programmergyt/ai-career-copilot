@@ -7,6 +7,12 @@
     </div>
 
     <template v-else>
+      <div class="toolbar">
+        <button class="toolbar-btn" @click="download('txt')">导出 TXT</button>
+        <button class="toolbar-btn" @click="download('json')">导出 JSON</button>
+        <button class="toolbar-btn" @click="download('md')">导出 MD</button>
+      </div>
+
       <!-- 基本信息 -->
       <section class="card">
         <h3>{{ job.title || '岗位名称' }}</h3>
@@ -91,10 +97,34 @@
 </template>
 
 <script setup>
-defineProps({
+import { exportArtifact, readApiError } from '../../api/index.js'
+
+const props = defineProps({
   job: Object,
   gaps: Array,
+  sessionId: String,
 })
+
+async function download(format) {
+  if (!props.sessionId || !props.job) return
+  try {
+    const { data } = await exportArtifact(props.sessionId, 'job', format)
+    downloadBlob(data, `job-analysis.${format === 'md' ? 'md' : format}`, format)
+  } catch (e) {
+    alert('导出失败: ' + await readApiError(e))
+  }
+}
+
+function downloadBlob(blob, filename, format) {
+  const mediaType = format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain'
+  const fileBlob = blob instanceof Blob ? blob : new Blob([blob], { type: mediaType })
+  const url = URL.createObjectURL(fileBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
@@ -114,6 +144,24 @@ defineProps({
   font-size: 13px;
   color: var(--text-light);
   margin-top: 6px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.toolbar-btn {
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.toolbar-btn:hover {
+  background: var(--border);
 }
 
 .card {

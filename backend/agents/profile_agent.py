@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from models.llm import get_llm, parse_json_response
+from agents.json_contracts import ProfileExtractionOutput
+from models.llm import get_llm, invoke_json_with_schema
 from prompts.profile_extraction import PROFILE_EXTRACTION_PROMPT
 from workflow.state import (
     CopilotState, CandidateProfile, ProfileBasic, Material, Fact,
@@ -34,18 +34,22 @@ def profile_node(state: CopilotState) -> dict[str, Any]:
         existing_profile=existing_json,
     )
     llm = get_llm()
-    response = llm.invoke(prompt)
-    content = getattr(response, "content", str(response))
-    parsed = parse_json_response(content)
+    try:
+        parsed = invoke_json_with_schema(llm, prompt, ProfileExtractionOutput, logger, "Profile Agent")
+    except RuntimeError as exc:
+        logger.error("Profile Agent failed: %s", exc)
+        return {
+            "reply_message": "候选人画像解析失败：模型输出格式异常，请重试。",
+        }
 
     # 构建 profile
-    basic_data = parsed.get("profile_basic", {})
+    basic_data = parsed.profile_basic
     new_basic = ProfileBasic(
-        name=basic_data.get("name", ""),
-        email=basic_data.get("email", ""),
-        phone=basic_data.get("phone", ""),
-        city=basic_data.get("city", ""),
-        school=basic_data.get("school", ""),
+        name=basic_data.name,
+        email=basic_data.email,
+        phone=basic_data.phone,
+        city=basic_data.city,
+        school=basic_data.school,
     )
 
     # 增量合并 basic
@@ -75,13 +79,13 @@ def profile_node(state: CopilotState) -> dict[str, Any]:
 
     # 合并事实
     existing_facts = list(existing.facts) if existing else []
-    new_facts_data = parsed.get("facts", [])
+    new_facts_data = parsed.facts
     for fd in new_facts_data:
         fact = Fact(
-            id=fd.get("id", f"fact_{uuid.uuid4().hex[:8]}"),
-            type=fd.get("type", "skill"),
-            content=fd.get("content", ""),
-            source_refs=fd.get("source_refs", [material_id]),
+            id=fd.id or f"fact_{uuid.uuid4().hex[:8]}",
+            type=fd.type,
+            content=fd.content,
+            source_refs=fd.source_refs or [material_id],
             updated_at=now,
         )
         # 检查是否已存在相同 id 的事实，如果有则更新

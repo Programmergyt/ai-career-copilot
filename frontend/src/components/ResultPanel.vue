@@ -17,7 +17,7 @@
       <ProjectIntro v-if="activeTab === 'intro'" />
 
       <!-- 岗位分析 -->
-      <JobAnalysis v-if="activeTab === 'job'" :job="job" :gaps="gaps" />
+      <JobAnalysis v-if="activeTab === 'job'" :job="job" :gaps="gaps" :session-id="sessionId" />
 
       <!-- 简历预览 -->
       <ResumePreview
@@ -27,10 +27,10 @@
       />
 
       <!-- 缺失信息 -->
-      <GapsPanel v-if="activeTab === 'gaps'" :gaps="gaps" :questions="questions" />
+      <GapsPanel v-if="activeTab === 'gaps'" :gaps="gaps" :questions="questions" :session-id="sessionId" />
 
       <!-- 面试问答 -->
-      <InterviewPanel v-if="activeTab === 'interview'" :interview-qa="interviewQa" />
+      <InterviewPanel v-if="activeTab === 'interview'" :interview-qa="interviewQa" :session-id="sessionId" />
 
       <!-- 调试视图 -->
       <DebugPanel

@@ -14,6 +14,9 @@
         <button class="toolbar-btn" @click="exportJson" title="导出 JSON">
           📦 导出 JSON
         </button>
+        <button class="toolbar-btn" @click="exportMarkdown" title="导出 Markdown">
+          📝 导出 MD
+        </button>
         <button class="toolbar-btn" @click="refreshPreview" title="刷新预览">
           🔄 刷新
         </button>
@@ -32,7 +35,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { exportResume } from '../../api/index.js'
+import { exportArtifact, readApiError } from '../../api/index.js'
 
 const props = defineProps({
   resumeHtml: Object,
@@ -50,21 +53,30 @@ function refreshPreview() {
 async function exportHtml() {
   if (!props.sessionId) return
   try {
-    const { data } = await exportResume(props.sessionId, 'html')
+    const { data } = await exportArtifact(props.sessionId, 'resume', 'html')
     downloadBlob(data, 'resume.html', 'text/html')
   } catch (e) {
-    alert('导出失败: ' + (e.response?.data?.detail || e.message))
+    alert('导出失败: ' + await readApiError(e))
   }
 }
 
 async function exportJson() {
   if (!props.sessionId) return
   try {
-    const { data } = await exportResume(props.sessionId, 'json')
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    downloadBlob(blob, 'resume.json', 'application/json')
+    const { data } = await exportArtifact(props.sessionId, 'resume', 'json')
+    downloadBlob(data, 'resume.json', 'application/json')
   } catch (e) {
-    alert('导出失败: ' + (e.response?.data?.detail || e.message))
+    alert('导出失败: ' + await readApiError(e))
+  }
+}
+
+async function exportMarkdown() {
+  if (!props.sessionId) return
+  try {
+    const { data } = await exportArtifact(props.sessionId, 'resume', 'md')
+    downloadBlob(data, 'resume.md', 'text/markdown')
+  } catch (e) {
+    alert('导出失败: ' + await readApiError(e))
   }
 }
 

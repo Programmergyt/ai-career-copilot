@@ -6,6 +6,12 @@
       <p class="hint">系统会在分析后列出需要补充的信息</p>
     </div>
 
+    <div v-else class="toolbar">
+      <button class="toolbar-btn" @click="download('txt')">导出 TXT</button>
+      <button class="toolbar-btn" @click="download('json')">导出 JSON</button>
+      <button class="toolbar-btn" @click="download('md')">导出 MD</button>
+    </div>
+
     <!-- 待追问问题 -->
     <section v-if="questions?.length">
       <h4>❓ 待补充信息（{{ questions.length }} 项）</h4>
@@ -48,10 +54,34 @@
 </template>
 
 <script setup>
-defineProps({
+import { exportArtifact, readApiError } from '../../api/index.js'
+
+const props = defineProps({
   gaps: Array,
   questions: Array,
+  sessionId: String,
 })
+
+async function download(format) {
+  if (!props.sessionId || (!props.gaps?.length && !props.questions?.length)) return
+  try {
+    const { data } = await exportArtifact(props.sessionId, 'gaps', format)
+    downloadBlob(data, `gaps.${format === 'md' ? 'md' : format}`, format)
+  } catch (e) {
+    alert('导出失败: ' + await readApiError(e))
+  }
+}
+
+function downloadBlob(blob, filename, format) {
+  const mediaType = format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain'
+  const fileBlob = blob instanceof Blob ? blob : new Blob([blob], { type: mediaType })
+  const url = URL.createObjectURL(fileBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
@@ -71,6 +101,24 @@ defineProps({
   font-size: 13px;
   color: var(--text-light);
   margin-top: 6px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.toolbar-btn {
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.toolbar-btn:hover {
+  background: var(--border);
 }
 
 h4 {

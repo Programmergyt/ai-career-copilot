@@ -34,10 +34,24 @@ export function renderResume(sessionId, instruction) {
 }
 
 /** POST /api/export */
-export function exportResume(sessionId, format = 'html') {
-  return api.post('/export', { session_id: sessionId, format }, {
-    responseType: format === 'json' ? 'json' : 'blob',
+export function exportArtifact(sessionId, target = 'resume', format = 'html') {
+  return api.post('/export', { session_id: sessionId, target, format }, {
+    responseType: 'blob',
   })
+}
+
+export async function readApiError(error) {
+  const payload = error?.response?.data
+  if (payload instanceof Blob) {
+    try {
+      const text = await payload.text()
+      const parsed = JSON.parse(text)
+      return parsed?.detail || error.message
+    } catch {
+      return error.message
+    }
+  }
+  return payload?.detail || error.message
 }
 
 /** GET /health */

@@ -29,6 +29,9 @@ class PromptRouterLLM:
     def __init__(self, intent: str = "upload_jd") -> None:
         self.intent = intent
 
+    def bind(self, **kwargs):
+        return self
+
     def invoke(self, prompt):
         text = prompt if isinstance(prompt, str) else str(prompt)
 
@@ -183,32 +186,34 @@ class PromptRouterLLM:
             }, ensure_ascii=False))
 
         if "面试准备专家" in text:
-            return _FakeResponse(json.dumps([
-                {
-                    "id": "qa_1",
-                    "category": "technical",
-                    "question": "请介绍你在 RAG 项目中的角色和技术架构。",
-                    "answer": "我负责构建检索-生成闭环，并使用 LangChain 与 Chroma 实现高效向量检索。",
-                    "source_refs": ["projects"],
-                    "version": 1,
-                },
-                {
-                    "id": "qa_2",
-                    "category": "project_deep_dive",
-                    "question": "这个项目如何保证模型输出的准确性？",
-                    "answer": "通过检索结果预过滤、Prompt 设计与后处理规则，显著降低了 hallucination 风险。",
-                    "source_refs": ["projects"],
-                    "version": 1,
-                },
-                {
-                    "id": "qa_3",
-                    "category": "behavioral",
-                    "question": "你在团队协作中如何处理需求变更？",
-                    "answer": "我会及时与产品和研发对齐，拆解风险并调整迭代优先级。",
-                    "source_refs": [],
-                    "version": 1,
-                }
-            ], ensure_ascii=False))
+            return _FakeResponse(json.dumps({
+                "interview_qa": [
+                    {
+                        "id": "qa_1",
+                        "category": "technical",
+                        "question": "请介绍你在 RAG 项目中的角色和技术架构。",
+                        "answer": "我负责构建检索-生成闭环，并使用 LangChain 与 Chroma 实现高效向量检索。",
+                        "source_refs": ["projects"],
+                        "version": 1,
+                    },
+                    {
+                        "id": "qa_2",
+                        "category": "project_deep_dive",
+                        "question": "这个项目如何保证模型输出的准确性？",
+                        "answer": "通过检索结果预过滤、Prompt 设计与后处理规则，显著降低了 hallucination 风险。",
+                        "source_refs": ["projects"],
+                        "version": 1,
+                    },
+                    {
+                        "id": "qa_3",
+                        "category": "behavioral",
+                        "question": "你在团队协作中如何处理需求变更？",
+                        "answer": "我会及时与产品和研发对齐，拆解风险并调整迭代优先级。",
+                        "source_refs": [],
+                        "version": 1,
+                    }
+                ]
+            }, ensure_ascii=False))
 
         return _FakeResponse(json.dumps({"intent": "ask_question", "reason": "fallback"}, ensure_ascii=False))
 

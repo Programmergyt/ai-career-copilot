@@ -2,15 +2,17 @@
 
 import json
 import os
-from typing import Any
+from typing import Any, TypeVar
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, ValidationError
 
 from config_loader import get_config, get_llm_config, _resolve_api_key
 
 
 _llm_instance: Any | None = None
+_SchemaT = TypeVar("_SchemaT", bound=BaseModel)
 
 
 def _normalize_provider(provider: str) -> str:
@@ -135,14 +137,8 @@ def get_llm() -> Any:
     return _llm_instance
 
 
-def call_llm(system: str, user: str) -> str:
-    """调用 LLM，返回文本结果。"""
-    llm = get_llm()
-    response = llm.invoke([
-        SystemMessage(content=system),
-        HumanMessage(content=user),
-    ])
-    content = response.content
+def _extract_text_content(response: Any) -> str:
+    content = getattr(response, "content", response)
     if isinstance(content, list):
         parts = []
         for part in content:
@@ -154,11 +150,114 @@ def call_llm(system: str, user: str) -> str:
     return str(content).strip()
 
 
-def parse_json_response(text: str):
-    """从 LLM 回复中解析 JSON，兼容 ```json 包裹。"""
-    cleaned = text.strip()
+def _get_json_llm(llm: Any) -> Any:
+    cfg = get_llm_config()
+    provider = _normalize_provider(cfg.get("provider", "openai"))
+    if provider == "deepseek" and hasattr(llm, "bind"):
+        try:
+            return llm.bind(response_format={"type": "json_object"})
+        except Exception:
+            return llm
+    return llm
+
+
+def _strip_code_fences(text: str) -> str:
+    cleaned = text.strip().replace("\ufeff", "")
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
         lines = [line for line in lines if not line.strip().startswith("```")]
-        cleaned = "\n".join(lines)
-    return json.loads(cleaned)
+        cleaned = "\n".join(lines).strip()
+    return cleaned
+
+
+def _extract_balanced_json(text: str) -> str:
+    start_positions = [index for index, char in enumerate(text) if char in "[{"]
+    for start in start_positions:
+        opener = text[start]
+        closer = "}" if opener == "{" else "]"
+        depth = 0
+        in_string = False
+        escape = False
+        for index in range(start, len(text)):
+            char = text[index]
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+                continue
+            if char == opener:
+                depth += 1
+            elif char == closer:
+                depth -= 1
+                if depth == 0:
+                    return text[start:index + 1]
+    return text
+
+
+def _build_repair_prompt(raw_output: str, schema: type[BaseModel], error: Exception) -> str:
+    schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False, indent=2)
+    return (
+        "你是 JSON 修复器。请把下面内容修复为单个合法 JSON 对象，并严格符合给定 JSON Schema。"
+        "不要输出 Markdown，不要输出解释，不要输出代码块。\n\n"
+        f"JSON Schema:\n{schema_json}\n\n"
+        f"上一轮错误:\n{error}\n\n"
+        f"待修复内容:\n{raw_output}"
+    )
+
+
+def invoke_json_with_schema(
+    llm: Any,
+    prompt: str,
+    schema: type[_SchemaT],
+    logger: Any,
+    agent_name: str,
+) -> _SchemaT:
+    """Invoke LLM for strict JSON output with mild tolerance and one repair retry."""
+    json_llm = _get_json_llm(llm)
+    request_prompt = prompt
+    last_error: Exception | None = None
+
+    for attempt in range(2):
+        response = json_llm.invoke(request_prompt)
+        raw_output = _extract_text_content(response)
+        try:
+            parsed = parse_json_response(raw_output)
+            return schema.model_validate(parsed)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+            logger.error("%s JSON parse/validation failed on attempt %d: %s", agent_name, attempt + 1, exc)
+            logger.error("%s raw model output on attempt %d:\n%s", agent_name, attempt + 1, raw_output)
+            last_error = exc
+            if attempt == 0:
+                request_prompt = _build_repair_prompt(raw_output, schema, exc)
+                continue
+            break
+
+    raise RuntimeError(f"{agent_name} JSON parse/validation failed after retry: {last_error}")
+
+
+def call_llm(system: str, user: str) -> str:
+    """调用 LLM，返回文本结果。"""
+    llm = get_llm()
+    response = llm.invoke([
+        SystemMessage(content=system),
+        HumanMessage(content=user),
+    ])
+    return _extract_text_content(response)
+
+
+def parse_json_response(text: str):
+    """从 LLM 回复中解析 JSON，兼容代码块和前后包裹文本。"""
+    cleaned = _strip_code_fences(text)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        extracted = _extract_balanced_json(cleaned)
+        if extracted != cleaned:
+            return json.loads(extracted)
+        raise

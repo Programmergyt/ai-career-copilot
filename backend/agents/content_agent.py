@@ -7,7 +7,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from models.llm import get_llm, parse_json_response
+from agents.json_contracts import ResumeGenerationOutput
+from models.llm import get_llm, invoke_json_with_schema
 from prompts.resume_generation import RESUME_GENERATION_PROMPT, RESUME_SECTION_UPDATE_PROMPT
 from workflow.state import (
     CopilotState, ResumeContent, ResumeProfile, ResumeContentMeta,
@@ -18,41 +19,41 @@ from log import get_logger
 logger = get_logger("agent")
 
 
-def _build_resume_from_parsed(parsed: dict, state: CopilotState) -> ResumeContent:
+def _build_resume_from_parsed(parsed: ResumeGenerationOutput, state: CopilotState) -> ResumeContent:
     """从 LLM 返回的 JSON 构建 ResumeContent 对象。"""
     now = datetime.now(timezone.utc).isoformat()
 
-    profile_data = parsed.get("profile", {})
+    profile_data = parsed.profile
     education_list = []
-    for ed in profile_data.get("education", []):
+    for ed in profile_data.education:
         education_list.append(Education(
-            id=ed.get("id", ""),
-            school=ed.get("school", ""),
-            major=ed.get("major", ""),
-            degree=ed.get("degree", ""),
-            start_date=ed.get("start_date", ""),
-            end_date=ed.get("end_date", ""),
+            id=ed.id,
+            school=ed.school,
+            major=ed.major,
+            degree=ed.degree,
+            start_date=ed.start_date,
+            end_date=ed.end_date,
         ))
 
     resume_profile = ResumeProfile(
-        name=profile_data.get("name", ""),
-        email=profile_data.get("email", ""),
-        phone=profile_data.get("phone", ""),
-        city=profile_data.get("city", ""),
-        github=profile_data.get("github", ""),
+        name=profile_data.name,
+        email=profile_data.email,
+        phone=profile_data.phone,
+        city=profile_data.city,
+        github=profile_data.github,
         education=education_list,
     )
 
-    def _parse_items(items: list[dict]) -> list[SectionItem]:
+    def _parse_items(items: list[Any]) -> list[SectionItem]:
         return [SectionItem(
-            id=item.get("id", ""),
-            title=item.get("title", ""),
-            content=item.get("content", ""),
-            source_refs=item.get("source_refs", []),
+            id=item.id,
+            title=item.title,
+            content=item.content,
+            source_refs=item.source_refs,
             updated_at=now,
         ) for item in items]
 
-    content_json = json.dumps(parsed, ensure_ascii=False, sort_keys=True)
+    content_json = json.dumps(parsed.model_dump(), ensure_ascii=False, sort_keys=True)
     content_hash = hashlib.sha256(content_json.encode()).hexdigest()[:16]
 
     version = 1
@@ -65,12 +66,12 @@ def _build_resume_from_parsed(parsed: dict, state: CopilotState) -> ResumeConten
 
     return ResumeContent(
         profile=resume_profile,
-        summary=parsed.get("summary", ""),
-        skills=_parse_items(parsed.get("skills", [])),
-        internships=_parse_items(parsed.get("internships", [])),
-        projects=_parse_items(parsed.get("projects", [])),
-        awards=_parse_items(parsed.get("awards", [])),
-        papers=_parse_items(parsed.get("papers", [])),
+        summary=parsed.summary,
+        skills=_parse_items(parsed.skills),
+        internships=_parse_items(parsed.internships),
+        projects=_parse_items(parsed.projects),
+        awards=_parse_items(parsed.awards),
+        papers=_parse_items(parsed.papers),
         meta=ResumeContentMeta(
             target_role=target_role,
             version=version,
@@ -109,9 +110,13 @@ def content_node(state: CopilotState) -> dict[str, Any]:
             edit_instruction=edit_instruction,
         )
 
-    response = llm.invoke(prompt)
-    content = getattr(response, "content", str(response))
-    parsed = parse_json_response(content)
+    try:
+        parsed = invoke_json_with_schema(llm, prompt, ResumeGenerationOutput, logger, "Resume Content Agent")
+    except RuntimeError as exc:
+        logger.error("Resume Content Agent failed: %s", exc)
+        return {
+            "reply_message": "简历内容生成失败：模型输出格式异常，请重试。",
+        }
 
     resume_content = _build_resume_from_parsed(parsed, state)
 
@@ -131,5 +136,5 @@ def content_node(state: CopilotState) -> dict[str, Any]:
     return {
         "resume_content_json": resume_content,
         "meta": meta,
-        "reply_message": f"简历内容已生成（v{resume_content.meta.version}）。",
+        "reply_message": f"简历内容已生成（v{resume_content.meta.version}）。请在右侧简历预览栏目查看最新内容。",
     }

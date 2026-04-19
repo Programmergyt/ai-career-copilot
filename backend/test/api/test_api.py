@@ -5,10 +5,13 @@
 使用 TestClient 测试各 API 路由的请求/响应结构。
 """
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from workflow.state import CopilotState, Gap, InterviewQA, Job, Question
 
 
 @pytest.fixture(scope="module")
@@ -81,3 +84,113 @@ class TestExportEndpoint:
         })
         # session 不存在时先返回 404
         assert response.status_code in (400, 404)
+
+    def test_export_job_txt(self, client, monkeypatch):
+        saved_state = CopilotState(
+            session_id="sess_export_job",
+            job=Job(
+                id="job_1",
+                title="AI Engineer Intern",
+                industry="Internet",
+                tech_stack=["Python", "LangChain"],
+                hard_skills=["RAG"],
+                responsibilities=["Build AI workflows"],
+            ),
+        ).model_dump()
+
+        class DummyStore:
+            def __init__(self, session_id):
+                self.session_id = session_id
+
+            def load_state(self):
+                return saved_state
+
+        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+
+        response = client.post("/api/export", json={
+            "session_id": "sess_export_job",
+            "target": "job",
+            "format": "txt",
+        })
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain")
+        assert "岗位解析" in response.text
+        assert "AI Engineer Intern" in response.text
+
+    def test_export_gaps_json(self, client, monkeypatch):
+        saved_state = CopilotState(
+            session_id="sess_export_gaps",
+            gaps=[
+                Gap(
+                    id="gap_1",
+                    type="missing_skill",
+                    severity="high",
+                    description="缺少生产级 RAG 经验",
+                )
+            ],
+            questions_to_ask=[
+                Question(
+                    id="q_1",
+                    question="你是否做过线上 RAG 项目？",
+                    reason="确认项目深度",
+                    target_field="projects",
+                    priority="high",
+                )
+            ],
+        ).model_dump()
+
+        class DummyStore:
+            def __init__(self, session_id):
+                self.session_id = session_id
+
+            def load_state(self):
+                return saved_state
+
+        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+
+        response = client.post("/api/export", json={
+            "session_id": "sess_export_gaps",
+            "target": "gaps",
+            "format": "json",
+        })
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        payload = json.loads(response.text)
+        assert payload["gaps"][0]["description"] == "缺少生产级 RAG 经验"
+        assert payload["questions_to_ask"][0]["target_field"] == "projects"
+
+    def test_export_interview_markdown(self, client, monkeypatch):
+        saved_state = CopilotState(
+            session_id="sess_export_interview",
+            interview_qa=[
+                InterviewQA(
+                    id="qa_1",
+                    category="technical",
+                    question="How do you reduce hallucination in RAG?",
+                    answer="I improve retrieval quality, grounding, and evaluation.",
+                    source_refs=["proj_1"],
+                )
+            ],
+        ).model_dump()
+
+        class DummyStore:
+            def __init__(self, session_id):
+                self.session_id = session_id
+
+            def load_state(self):
+                return saved_state
+
+        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+
+        response = client.post("/api/export", json={
+            "session_id": "sess_export_interview",
+            "target": "interview",
+            "format": "md",
+        })
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/markdown")
+        assert "# 面试问答" in response.text
+        assert "How do you reduce hallucination in RAG?" in response.text

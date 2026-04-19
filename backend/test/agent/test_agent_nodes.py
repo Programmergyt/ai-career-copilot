@@ -1,6 +1,8 @@
 """Agent 节点测试：使用 fixtures 实际文件，且启用 LangSmith 监控。"""
-
+# python -m pytest backend/test/agent/test_agent_nodes.py -sv
 from __future__ import annotations
+
+import json
 
 import pytest
 
@@ -21,6 +23,44 @@ from test.test_support import (
     read_fixture_text,
     ensure_langsmith_enabled,
 )
+
+
+class _FakeResponse:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class BrokenThenRepairedInterviewLLM:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind(self, **kwargs):
+        return self
+
+    def invoke(self, prompt):
+        self.calls += 1
+        if self.calls == 1:
+            return _FakeResponse('{"interview_qa": [{"id": "qa_1", "question": "bad"}')
+        return _FakeResponse(json.dumps({
+            "interview_qa": [
+                {
+                    "id": "qa_1",
+                    "category": "technical",
+                    "question": "请介绍你的 RAG 项目。",
+                    "answer": "我负责检索与生成链路的实现。",
+                    "source_refs": ["projects"],
+                    "version": 1,
+                }
+            ]
+        }, ensure_ascii=False))
+
+
+class AlwaysBrokenInterviewLLM:
+    def bind(self, **kwargs):
+        return self
+
+    def invoke(self, prompt):
+        return _FakeResponse('{"interview_qa": [{"id": "qa_1" ') 
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -182,3 +222,55 @@ def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fi
     assert render_updates["render_config"].layout_mode == "double-column"
     assert "<html" in render_updates["resume_html"].html.lower()
     assert render_updates["meta"].dirty_flags.render_dirty is False
+
+
+def test_interview_node_retries_once_after_invalid_json(monkeypatch, fixture_jd_text):
+    llm = BrokenThenRepairedInterviewLLM()
+    monkeypatch.setattr("agents.interview_agent.get_llm", lambda: llm)
+
+    resume_content = ResumeContent(
+        profile=ResumeProfile(name="林知遥"),
+        summary="聚焦 AIGC 与 RAG 的候选人。",
+        projects=[
+            SectionItem(id="proj_1", title="AI Career Copilot", content="负责多 Agent 系统实现。", source_refs=[], updated_at=""),
+        ],
+        meta=ResumeContentMeta(target_role="AIGC工程师", version=1),
+    )
+    state = CopilotState(
+        session_id="sess_interview_retry",
+        job=Job(id="job_1", title="AIGC工程师", source=fixture_jd_text),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+        resume_content_json=resume_content,
+    )
+
+    updates = interview_node(state)
+
+    assert llm.calls == 2
+    assert len(updates["interview_qa"]) == 1
+    assert updates["reply_message"].startswith("面试问答已生成")
+
+
+def test_interview_node_reports_failure_after_retry_exhausted(monkeypatch, fixture_jd_text):
+    llm = AlwaysBrokenInterviewLLM()
+    monkeypatch.setattr("agents.interview_agent.get_llm", lambda: llm)
+
+    resume_content = ResumeContent(
+        profile=ResumeProfile(name="林知遥"),
+        summary="聚焦 AIGC 与 RAG 的候选人。",
+        projects=[
+            SectionItem(id="proj_1", title="AI Career Copilot", content="负责多 Agent 系统实现。", source_refs=[], updated_at=""),
+        ],
+        meta=ResumeContentMeta(target_role="AIGC工程师", version=1),
+    )
+    state = CopilotState(
+        session_id="sess_interview_fail",
+        job=Job(id="job_1", title="AIGC工程师", source=fixture_jd_text),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+        resume_content_json=resume_content,
+    )
+
+    updates = interview_node(state)
+
+    assert updates["interview_qa"] == []
+    assert updates["reply_message"] == "面试问答生成失败：模型输出格式异常，请重试。"
+    assert "meta" not in updates

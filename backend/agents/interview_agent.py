@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Any
 
-from models.llm import get_llm, parse_json_response
+from agents.json_contracts import InterviewGenerationOutput
+from models.llm import get_llm, invoke_json_with_schema
 from prompts.interview_generation import INTERVIEW_GENERATION_PROMPT
 from workflow.state import CopilotState, InterviewQA
 from log import get_logger
@@ -14,17 +14,16 @@ from log import get_logger
 logger = get_logger("agent")
 
 
-def _build_interview_qa(parsed: Any) -> list[InterviewQA]:
+def _build_interview_qa(parsed: InterviewGenerationOutput) -> list[InterviewQA]:
     interview_qa: list[InterviewQA] = []
-    items = parsed if isinstance(parsed, list) else parsed.get("interview_qa", [])
-    for item in items:
+    for item in parsed.interview_qa:
         interview_qa.append(InterviewQA(
-            id=item.get("id", f"qa_{uuid.uuid4().hex[:12]}"),
-            category=item.get("category", "technical"),
-            question=item.get("question", ""),
-            answer=item.get("answer", ""),
-            source_refs=item.get("source_refs", []),
-            version=item.get("version", 1),
+            id=item.id or f"qa_{uuid.uuid4().hex[:12]}",
+            category=item.category,
+            question=item.question,
+            answer=item.answer,
+            source_refs=item.source_refs,
+            version=item.version,
         ))
     return interview_qa
 
@@ -46,15 +45,14 @@ def interview_node(state: CopilotState) -> dict[str, Any]:
         resume_json=state.resume_content_json.model_dump_json(indent=2),
     )
     llm = get_llm()
-    response = llm.invoke(prompt)
-    content = getattr(response, "content", str(response))
-
-    parsed = []
     try:
-        parsed = parse_json_response(content)
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Interview QA parse failed: %s", exc)
-        parsed = []
+        parsed = invoke_json_with_schema(llm, prompt, InterviewGenerationOutput, logger, "Interview Agent")
+    except RuntimeError as exc:
+        logger.error("Interview Agent failed: %s", exc)
+        return {
+            "reply_message": "面试问答生成失败：模型输出格式异常，请重试。",
+            "interview_qa": [],
+        }
 
     interview_qa = _build_interview_qa(parsed)
 
@@ -69,5 +67,5 @@ def interview_node(state: CopilotState) -> dict[str, Any]:
     return {
         "interview_qa": interview_qa,
         "meta": meta,
-        "reply_message": "面试问答已生成。",
+        "reply_message": "面试问答已生成。请在右侧面试问答栏目查看最新内容。",
     }

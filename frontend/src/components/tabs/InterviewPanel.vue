@@ -7,6 +7,12 @@
     </div>
 
     <template v-else>
+      <div class="toolbar">
+        <button class="toolbar-btn" @click="download('txt')">导出 TXT</button>
+        <button class="toolbar-btn" @click="download('json')">导出 JSON</button>
+        <button class="toolbar-btn" @click="download('md')">导出 MD</button>
+      </div>
+
       <div class="qa-count">共 {{ interviewQa.length }} 道面试题</div>
       <div
         v-for="(qa, i) in interviewQa"
@@ -36,12 +42,35 @@
 
 <script setup>
 import { reactive } from 'vue'
+import { exportArtifact, readApiError } from '../../api/index.js'
 
-defineProps({
+const props = defineProps({
   interviewQa: Array,
+  sessionId: String,
 })
 
 const expandedSet = reactive(new Set())
+
+async function download(format) {
+  if (!props.sessionId || !props.interviewQa?.length) return
+  try {
+    const { data } = await exportArtifact(props.sessionId, 'interview', format)
+    downloadBlob(data, `interview-qa.${format === 'md' ? 'md' : format}`, format)
+  } catch (e) {
+    alert('导出失败: ' + await readApiError(e))
+  }
+}
+
+function downloadBlob(blob, filename, format) {
+  const mediaType = format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain'
+  const fileBlob = blob instanceof Blob ? blob : new Blob([blob], { type: mediaType })
+  const url = URL.createObjectURL(fileBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function toggleQa(index) {
   if (expandedSet.has(index)) {
@@ -69,6 +98,24 @@ function toggleQa(index) {
   font-size: 13px;
   color: var(--text-light);
   margin-top: 6px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.toolbar-btn {
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.toolbar-btn:hover {
+  background: var(--border);
 }
 
 .qa-count {

@@ -6,7 +6,8 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-from models.llm import get_llm, parse_json_response
+from agents.json_contracts import RenderInstructionOutput
+from models.llm import get_llm, invoke_json_with_schema
 from prompts.render_instruction import RENDER_INSTRUCTION_PROMPT
 from tools.template_renderer import render_resume_html
 from workflow.state import CopilotState, RenderConfig, ResumeHtml, PageMargin
@@ -22,31 +23,29 @@ def _update_render_config_from_llm(state: CopilotState) -> RenderConfig:
         render_instruction=state.user_message,
     )
     llm = get_llm()
-    response = llm.invoke(prompt)
-    content = getattr(response, "content", str(response))
-    parsed = parse_json_response(content)
+    parsed = invoke_json_with_schema(llm, prompt, RenderInstructionOutput, logger, "Resume Render Agent")
 
-    margin_data = parsed.get("page_margin", {})
+    margin_data = parsed.page_margin
     new_config = RenderConfig(
-        template_id=parsed.get("template_id", state.render_config.template_id),
-        theme=parsed.get("theme", state.render_config.theme),
-        font_family=parsed.get("font_family", state.render_config.font_family),
-        font_size=parsed.get("font_size", state.render_config.font_size),
-        line_height=parsed.get("line_height", state.render_config.line_height),
+        template_id=parsed.template_id or state.render_config.template_id,
+        theme=parsed.theme or state.render_config.theme,
+        font_family=parsed.font_family or state.render_config.font_family,
+        font_size=parsed.font_size,
+        line_height=parsed.line_height,
         page_margin=PageMargin(
-            top=margin_data.get("top", state.render_config.page_margin.top),
-            right=margin_data.get("right", state.render_config.page_margin.right),
-            bottom=margin_data.get("bottom", state.render_config.page_margin.bottom),
-            left=margin_data.get("left", state.render_config.page_margin.left),
+            top=margin_data.top,
+            right=margin_data.right,
+            bottom=margin_data.bottom,
+            left=margin_data.left,
         ),
-        section_order=parsed.get("section_order", state.render_config.section_order),
-        dense_mode=parsed.get("dense_mode", state.render_config.dense_mode),
-        accent_style=parsed.get("accent_style", state.render_config.accent_style),
-        visibility_map=parsed.get("visibility_map", state.render_config.visibility_map),
-        layout_mode=parsed.get("layout_mode", state.render_config.layout_mode),
-        spacing_scale=parsed.get("spacing_scale", state.render_config.spacing_scale),
+        section_order=parsed.section_order or state.render_config.section_order,
+        dense_mode=parsed.dense_mode,
+        accent_style=parsed.accent_style or state.render_config.accent_style,
+        visibility_map=parsed.visibility_map or state.render_config.visibility_map,
+        layout_mode=parsed.layout_mode or state.render_config.layout_mode,
+        spacing_scale=parsed.spacing_scale or state.render_config.spacing_scale,
         version=state.render_config.version + 1,
-        last_render_reason=parsed.get("last_render_reason", state.user_message),
+        last_render_reason=parsed.last_render_reason or state.user_message,
     )
     return new_config
 
@@ -60,7 +59,13 @@ def render_node(state: CopilotState) -> dict[str, Any]:
 
     # 渲染指令 → 先更新 render_config
     if intent == "render_edit":
-        render_config = _update_render_config_from_llm(state)
+        try:
+            render_config = _update_render_config_from_llm(state)
+        except RuntimeError as exc:
+            logger.error("Resume Render Agent failed: %s", exc)
+            return {
+                "reply_message": "渲染配置解析失败：模型输出格式异常，请重试。",
+            }
         logger.info("Render config updated to v%d", render_config.version)
     else:
         # 内容更新触发，只递增版本

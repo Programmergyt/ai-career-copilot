@@ -13,4 +13,6 @@ data/
 !.env.docker.example
 
 node_modules/
-docs/private-deployment-notes.md
+
+docs/private-deployment.md
+/docs/marketing/*.md
