@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from storage.redis_client import RedisSessionStore
+from storage.redis_client import get_redis_client, RedisSessionStore
 from workflow.state import CopilotState, Gap, InterviewQA, Job, Question
 from log import get_logger
 
@@ -314,7 +314,8 @@ async def export_resume(req: ExportRequest):
     """导出简历、岗位解析、缺失信息或面试问答。"""
     from api.chat import _aload_state
 
-    store = RedisSessionStore(req.session_id)
+    client = await get_redis_client()
+    store = RedisSessionStore(req.session_id, client)
     saved = await _aload_state(store)
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")

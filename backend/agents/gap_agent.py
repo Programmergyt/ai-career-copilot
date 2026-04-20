@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 from agents.json_contracts import GapAnalysisOutput
-from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.gap_analysis import GAP_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Gap, Question
 from log import get_logger

@@ -49,6 +49,7 @@ fastapi:
   host: "0.0.0.0"
   port: 8000
   debug: true
+  workers: 2 # workers默认值，在env中可以覆盖
 
 testing:
   integration:

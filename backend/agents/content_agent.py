@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import ResumeGenerationOutput
-from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.resume_generation import RESUME_GENERATION_PROMPT, RESUME_SECTION_UPDATE_PROMPT
 from workflow.state import (
     CopilotState, ResumeContent, ResumeProfile, ResumeContentMeta,

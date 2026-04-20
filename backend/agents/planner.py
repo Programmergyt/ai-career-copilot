@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import IntentClassificationOutput
-from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
 from workflow.state import CopilotState
 from log import get_logger
@@ -25,20 +25,6 @@ _INTENT_PLAN: dict[str, list[str]] = {
     "export": [],
     "ask_question": ["gap_agent"],
 }
-
-
-def _classify_intent(state: CopilotState) -> IntentClassificationOutput:
-    """调用 LLM 进行意图分类。"""
-    prompt = INTENT_CLASSIFICATION_PROMPT.format(
-        has_job=state.job is not None,
-        has_profile=state.candidate_profile is not None,
-        has_resume=state.resume_content_json is not None,
-        user_message=state.user_message,
-    )
-    llm = get_llm()
-    result = invoke_json_with_schema(llm, prompt, IntentClassificationOutput, logger, "Planner Agent")
-    logger.info("Intent classified: %s (reason: %s)", result.intent, result.reason)
-    return result
 
 
 async def _classify_intent_async(state: CopilotState) -> IntentClassificationOutput:

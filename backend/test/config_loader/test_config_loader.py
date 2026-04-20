@@ -164,10 +164,12 @@ class TestFastAPIConfig:
         assert "host" in cfg
         assert "port" in cfg
         assert "debug" in cfg
+        assert "workers" in cfg
 
     def test_fastapi_config_values(self):
         cfg = get_fastapi_config()
         assert cfg["port"] == 8000
+        assert cfg["workers"] == 4
 
 
 class TestTestingConfig:

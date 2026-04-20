@@ -1,5 +1,6 @@
 """Rerank 统一封装：基于 config.yaml 的 provider 动态创建 reranker。"""
 
+import asyncio
 from typing import Any
 
 from config_loader import get_rerank_config
@@ -125,3 +126,8 @@ def rerank_texts(documents: list[str], query: str, top_n: int | None = None) -> 
         top_n=top_n,
     )
     return _normalize_rerank_results(raw_results, top_n)
+
+
+async def arerank_texts(documents: list[str], query: str, top_n: int | None = None) -> list[dict]:
+    """异步对文本列表执行 rerank，返回统一格式结果。"""
+    return await asyncio.to_thread(rerank_texts, documents, query, top_n)

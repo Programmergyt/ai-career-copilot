@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import ProfileExtractionOutput
-from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.profile_extraction import PROFILE_EXTRACTION_PROMPT
 from workflow.state import (
     CopilotState, CandidateProfile, ProfileBasic, Material, Fact,

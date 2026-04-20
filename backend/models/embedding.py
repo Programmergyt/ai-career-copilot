@@ -1,5 +1,6 @@
 """Embedding 统一封装：基于 config.yaml 的 provider 动态创建 Embeddings。"""
 
+import asyncio
 from typing import Any
 
 from config_loader import get_embedding_config
@@ -98,3 +99,19 @@ def get_embedding_model() -> Any:
         "Unsupported embedding.provider='{}'. Supported providers: dashscope, openai, "
         "deepseek, qwen, azure_openai, ollama, huggingface".format(provider)
     )
+
+
+async def aembed_query(text: str) -> list[float]:
+    """异步获取单条文本的 embedding 向量。"""
+    model = get_embedding_model()
+    if hasattr(model, "aembed_query"):
+        return await model.aembed_query(text)
+    return await asyncio.to_thread(model.embed_query, text)
+
+
+async def aembed_documents(texts: list[str]) -> list[list[float]]:
+    """异步获取多条文本的 embedding 向量。"""
+    model = get_embedding_model()
+    if hasattr(model, "aembed_documents"):
+        return await model.aembed_documents(texts)
+    return await asyncio.to_thread(model.embed_documents, texts)

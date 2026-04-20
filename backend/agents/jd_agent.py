@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import JDAnalysisOutput
-from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.jd_analysis import JD_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Job
 from log import get_logger

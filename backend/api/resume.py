@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
 from pydantic import BaseModel
 
-from storage.redis_client import RedisSessionStore
+from storage.redis_client import get_redis_client, RedisSessionStore
 from workflow.state import CopilotState
 from log import get_logger
 
@@ -19,7 +19,8 @@ async def get_resume_content(session_id: str):
     """获取当前简历内容 JSON。"""
     from api.chat import _aload_state
 
-    store = RedisSessionStore(session_id)
+    client = await get_redis_client()
+    store = RedisSessionStore(session_id, client)
     saved = await _aload_state(store)
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -34,7 +35,8 @@ async def get_resume_html(session_id: str):
     """获取当前简历 HTML。"""
     from api.chat import _aload_state
 
-    store = RedisSessionStore(session_id)
+    client = await get_redis_client()
+    store = RedisSessionStore(session_id, client)
     saved = await _aload_state(store)
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -49,7 +51,8 @@ async def preview_resume_html(session_id: str):
     """直接返回 HTML 用于浏览器预览。"""
     from api.chat import _aload_state
 
-    store = RedisSessionStore(session_id)
+    client = await get_redis_client()
+    store = RedisSessionStore(session_id, client)
     saved = await _aload_state(store)
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -69,7 +72,8 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
     """渲染指令接口。"""
     from api.chat import _ainvoke_graph, _aload_state, _asave_state, _get_graph, _persist_to_mysql_safe
 
-    store = RedisSessionStore(req.session_id)
+    client = await get_redis_client()
+    store = RedisSessionStore(req.session_id, client)
     saved = await _aload_state(store)
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")

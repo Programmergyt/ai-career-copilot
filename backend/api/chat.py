@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field
 from api.chat_input import prepare_chat_input
 from workflow.graph import compile_graph
 from workflow.state import CopilotState
-from storage.redis_client import RedisSessionStore
-from storage.mysql_client import MySQLStore
+from storage.redis_client import get_redis_client, RedisSessionStore
+from storage.mysql_client import get_mysql_pool, MySQLStore
 from log import get_logger
 
 logger = get_logger("api")
@@ -30,17 +30,12 @@ def _get_graph():
     return _graph
 
 
-async def _aload_state(store: Any) -> dict[str, Any] | None:
-    if hasattr(store, "aload_state"):
-        return await store.aload_state()
-    return await asyncio.to_thread(store.load_state)
+async def _aload_state(store: RedisSessionStore) -> dict[str, Any] | None:
+    return await store.load_state()
 
 
-async def _asave_state(store: Any, state: dict[str, Any]) -> None:
-    if hasattr(store, "asave_state"):
-        await store.asave_state(state)
-        return
-    await asyncio.to_thread(store.save_state, state)
+async def _asave_state(store: RedisSessionStore, state: dict[str, Any]) -> None:
+    await store.save_state(state)
 
 
 async def _ainvoke_graph(graph: Any, payload: dict[str, Any], *, config: dict[str, Any] | None = None) -> Any:
@@ -75,7 +70,8 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
     logger.info("Chat request: session=%s, msg_len=%d", session_id, len(req.message))
 
     # 从 Redis 加载或创建状态
-    store = RedisSessionStore(session_id)
+    redis_client = await get_redis_client()
+    store = RedisSessionStore(session_id, redis_client)
     saved_state = await _aload_state(store)
 
     if saved_state:
@@ -121,21 +117,22 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
     )
 
 
-def _persist_to_mysql(state: CopilotState) -> None:
-    """将关键状态持久化到 MySQL。"""
-    db = MySQLStore()
-    db.upsert_session(state.session_id)
+async def _persist_to_mysql(state: CopilotState) -> None:
+    """将关键状态异步持久化到 MySQL。"""
+    pool = await get_mysql_pool()
+    db = MySQLStore(pool)
+    await db.upsert_session(state.session_id)
 
     if state.job:
-        db.save_job(state.job.id, state.session_id, state.job.model_dump(), state.job.version)
+        await db.save_job(state.job.id, state.session_id, state.job.model_dump(), state.job.version)
 
     if state.candidate_profile:
         profile_id = f"profile_{state.session_id}"
-        db.save_candidate_profile(profile_id, state.session_id, state.candidate_profile.model_dump())
+        await db.save_candidate_profile(profile_id, state.session_id, state.candidate_profile.model_dump())
 
     if state.resume_content_json:
         content_id = f"content_{state.session_id}"
-        db.save_resume_content(
+        await db.save_resume_content(
             content_id, state.session_id,
             state.resume_content_json.model_dump(),
             state.resume_content_json.meta.version,
@@ -143,12 +140,12 @@ def _persist_to_mysql(state: CopilotState) -> None:
         )
 
     render_id = f"render_{state.session_id}"
-    db.save_render_config(render_id, state.session_id,
-                          state.render_config.model_dump(), state.render_config.version)
+    await db.save_render_config(render_id, state.session_id,
+                                state.render_config.model_dump(), state.render_config.version)
 
     if state.resume_html.html:
         html_id = f"html_{state.session_id}"
-        db.save_resume_html(
+        await db.save_resume_html(
             html_id, state.session_id, state.resume_html.html,
             state.resume_html.version,
             state.resume_html.derived_from_content_version,
@@ -158,20 +155,15 @@ def _persist_to_mysql(state: CopilotState) -> None:
 
     if state.interview_qa:
         interview_id = f"interview_{state.session_id}"
-        db.save_interview_qa(
+        await db.save_interview_qa(
             interview_id, state.session_id,
             {"interview_qa": [qa.model_dump() for qa in state.interview_qa]},
             len(state.interview_qa),
         )
 
 
-async def _persist_to_mysql_async(state: CopilotState) -> None:
-    """异步包装 MySQL 持久化，底层仍复用同步客户端。"""
-    await asyncio.to_thread(_persist_to_mysql, state)
-
-
 async def _persist_to_mysql_safe(state: CopilotState) -> None:
     try:
-        await _persist_to_mysql_async(state)
+        await _persist_to_mysql(state)
     except Exception as e:
         logger.error("MySQL persistence failed: %s", e, exc_info=True)
