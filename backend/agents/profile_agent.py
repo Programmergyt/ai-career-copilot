@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import ProfileExtractionOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.profile_extraction import PROFILE_EXTRACTION_PROMPT
 from workflow.state import (
     CopilotState, CandidateProfile, ProfileBasic, Material, Fact,
@@ -17,8 +18,8 @@ from log import get_logger
 logger = get_logger("agent")
 
 
-def profile_node(state: CopilotState) -> dict[str, Any]:
-    """Profile Agent 节点函数。"""
+async def profile_node_async(state: CopilotState) -> dict[str, Any]:
+    """Profile Agent 异步节点函数。"""
     logger.info("Profile Agent started for session %s", state.session_id)
 
     material_text = state.user_message
@@ -35,7 +36,7 @@ def profile_node(state: CopilotState) -> dict[str, Any]:
     )
     llm = get_llm()
     try:
-        parsed = invoke_json_with_schema(llm, prompt, ProfileExtractionOutput, logger, "Profile Agent")
+        parsed = await ainvoke_json_with_schema(llm, prompt, ProfileExtractionOutput, logger, "Profile Agent")
     except RuntimeError as exc:
         logger.error("Profile Agent failed: %s", exc)
         return {
@@ -119,3 +120,8 @@ def profile_node(state: CopilotState) -> dict[str, Any]:
         "meta": meta,
         "reply_message": f"已更新候选人画像：{new_basic.name}，共 {len(existing_facts)} 条事实记录。",
     }
+
+
+def profile_node(state: CopilotState) -> dict[str, Any]:
+    """Profile Agent 同步兼容入口。"""
+    return asyncio.run(profile_node_async(state))

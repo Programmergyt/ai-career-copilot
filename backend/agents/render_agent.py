@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import RenderInstructionOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.render_instruction import RENDER_INSTRUCTION_PROMPT
 from tools.template_renderer import render_resume_html
 from workflow.state import CopilotState, RenderConfig, ResumeHtml, PageMargin
@@ -50,8 +51,42 @@ def _update_render_config_from_llm(state: CopilotState) -> RenderConfig:
     return new_config
 
 
-def render_node(state: CopilotState) -> dict[str, Any]:
-    """Resume Render Agent 节点函数。"""
+async def _update_render_config_from_llm_async(state: CopilotState) -> RenderConfig:
+    """异步解析渲染指令并更新配置。"""
+    prompt = RENDER_INSTRUCTION_PROMPT.format(
+        current_render_config=state.render_config.model_dump_json(indent=2),
+        render_instruction=state.user_message,
+    )
+    llm = get_llm()
+    parsed = await ainvoke_json_with_schema(llm, prompt, RenderInstructionOutput, logger, "Resume Render Agent")
+
+    margin_data = parsed.page_margin
+    new_config = RenderConfig(
+        template_id=parsed.template_id or state.render_config.template_id,
+        theme=parsed.theme or state.render_config.theme,
+        font_family=parsed.font_family or state.render_config.font_family,
+        font_size=parsed.font_size,
+        line_height=parsed.line_height,
+        page_margin=PageMargin(
+            top=margin_data.top,
+            right=margin_data.right,
+            bottom=margin_data.bottom,
+            left=margin_data.left,
+        ),
+        section_order=parsed.section_order or state.render_config.section_order,
+        dense_mode=parsed.dense_mode,
+        accent_style=parsed.accent_style or state.render_config.accent_style,
+        visibility_map=parsed.visibility_map or state.render_config.visibility_map,
+        layout_mode=parsed.layout_mode or state.render_config.layout_mode,
+        spacing_scale=parsed.spacing_scale or state.render_config.spacing_scale,
+        version=state.render_config.version + 1,
+        last_render_reason=parsed.last_render_reason or state.user_message,
+    )
+    return new_config
+
+
+async def render_node_async(state: CopilotState) -> dict[str, Any]:
+    """Resume Render Agent 异步节点函数。"""
     logger.info("Resume Render Agent started for session %s", state.session_id)
 
     intent = state.current_intent
@@ -60,7 +95,7 @@ def render_node(state: CopilotState) -> dict[str, Any]:
     # 渲染指令 → 先更新 render_config
     if intent == "render_edit":
         try:
-            render_config = _update_render_config_from_llm(state)
+            render_config = await _update_render_config_from_llm_async(state)
         except RuntimeError as exc:
             logger.error("Resume Render Agent failed: %s", exc)
             return {
@@ -115,3 +150,8 @@ def render_node(state: CopilotState) -> dict[str, Any]:
         "meta": meta,
         "reply_message": msg,
     }
+
+
+def render_node(state: CopilotState) -> dict[str, Any]:
+    """Resume Render Agent 同步兼容入口。"""
+    return asyncio.run(render_node_async(state))

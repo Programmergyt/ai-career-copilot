@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
 from agents.json_contracts import GapAnalysisOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.gap_analysis import GAP_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Gap, Question
 from log import get_logger
@@ -44,8 +45,8 @@ def _build_question_list(parsed: GapAnalysisOutput) -> list[Question]:
     return questions
 
 
-def gap_node(state: CopilotState) -> dict[str, Any]:
-    """Gap Analysis Agent 节点函数。"""
+async def gap_node_async(state: CopilotState) -> dict[str, Any]:
+    """Gap Analysis Agent 异步节点函数。"""
     logger.info("Gap Analysis Agent started for session %s", state.session_id)
 
     if state.job is None or state.candidate_profile is None:
@@ -62,7 +63,7 @@ def gap_node(state: CopilotState) -> dict[str, Any]:
     )
     llm = get_llm()
     try:
-        parsed = invoke_json_with_schema(llm, prompt, GapAnalysisOutput, logger, "Gap Analysis Agent")
+        parsed = await ainvoke_json_with_schema(llm, prompt, GapAnalysisOutput, logger, "Gap Analysis Agent")
     except RuntimeError as exc:
         logger.error("Gap Analysis Agent failed: %s", exc)
         return {
@@ -81,3 +82,8 @@ def gap_node(state: CopilotState) -> dict[str, Any]:
         "questions_to_ask": questions,
         "reply_message": "缺失信息分析已完成。请在右侧缺失信息栏目查看最新内容。",
     }
+
+
+def gap_node(state: CopilotState) -> dict[str, Any]:
+    """Gap Analysis Agent 同步兼容入口。"""
+    return asyncio.run(gap_node_async(state))

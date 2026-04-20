@@ -1,5 +1,6 @@
 """LLM 统一封装：基于 config.yaml 的 provider 动态创建 LangChain Chat Model。"""
 
+import asyncio
 import json
 import os
 from typing import Any, TypeVar
@@ -241,10 +242,56 @@ def invoke_json_with_schema(
     raise RuntimeError(f"{agent_name} JSON parse/validation failed after retry: {last_error}")
 
 
+async def _ainvoke_model(llm: Any, payload: Any) -> Any:
+    if hasattr(llm, "ainvoke"):
+        return await llm.ainvoke(payload)
+    return await asyncio.to_thread(llm.invoke, payload)
+
+
+async def ainvoke_json_with_schema(
+    llm: Any,
+    prompt: str,
+    schema: type[_SchemaT],
+    logger: Any,
+    agent_name: str,
+) -> _SchemaT:
+    """异步调用 LLM 并执行 JSON Schema 校验。"""
+    json_llm = _get_json_llm(llm)
+    request_prompt = prompt
+    last_error: Exception | None = None
+
+    for attempt in range(2):
+        response = await _ainvoke_model(json_llm, request_prompt)
+        raw_output = _extract_text_content(response)
+        try:
+            parsed = parse_json_response(raw_output)
+            return schema.model_validate(parsed)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+            logger.error("%s JSON parse/validation failed on attempt %d: %s", agent_name, attempt + 1, exc)
+            logger.error("%s raw model output on attempt %d:\n%s", agent_name, attempt + 1, raw_output)
+            last_error = exc
+            if attempt == 0:
+                request_prompt = _build_repair_prompt(raw_output, schema, exc)
+                continue
+            break
+
+    raise RuntimeError(f"{agent_name} JSON parse/validation failed after retry: {last_error}")
+
+
 def call_llm(system: str, user: str) -> str:
     """调用 LLM，返回文本结果。"""
     llm = get_llm()
     response = llm.invoke([
+        SystemMessage(content=system),
+        HumanMessage(content=user),
+    ])
+    return _extract_text_content(response)
+
+
+async def acall_llm(system: str, user: str) -> str:
+    """异步调用 LLM，返回文本结果。"""
+    llm = get_llm()
+    response = await _ainvoke_model(llm, [
         SystemMessage(content=system),
         HumanMessage(content=user),
     ])

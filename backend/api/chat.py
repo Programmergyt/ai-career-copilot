@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from api.chat_input import prepare_chat_input
@@ -29,6 +30,25 @@ def _get_graph():
     return _graph
 
 
+async def _aload_state(store: Any) -> dict[str, Any] | None:
+    if hasattr(store, "aload_state"):
+        return await store.aload_state()
+    return await asyncio.to_thread(store.load_state)
+
+
+async def _asave_state(store: Any, state: dict[str, Any]) -> None:
+    if hasattr(store, "asave_state"):
+        await store.asave_state(state)
+        return
+    await asyncio.to_thread(store.save_state, state)
+
+
+async def _ainvoke_graph(graph: Any, payload: dict[str, Any], *, config: dict[str, Any] | None = None) -> Any:
+    if hasattr(graph, "ainvoke"):
+        return await graph.ainvoke(payload, config=config)
+    return await asyncio.to_thread(graph.invoke, payload, config)
+
+
 class ChatRequest(BaseModel):
     session_id: str = ""
     message: str
@@ -49,14 +69,14 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatResponse:
     """主对话接口。"""
     session_id = req.session_id or f"sess_{uuid.uuid4().hex[:16]}"
     logger.info("Chat request: session=%s, msg_len=%d", session_id, len(req.message))
 
     # 从 Redis 加载或创建状态
     store = RedisSessionStore(session_id)
-    saved_state = store.load_state()
+    saved_state = await _aload_state(store)
 
     if saved_state:
         state = CopilotState.model_validate(saved_state)
@@ -71,7 +91,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     # 执行 workflow graph，加上config指定langsmith的run_name，方便在LangSmith上查看每次API调用的执行详情
     graph = _get_graph()
     try:
-        result = graph.invoke(state.model_dump(),config={"run_name": f"API-Chat-Request: {session_id}"})
+        result = await _ainvoke_graph(graph, state.model_dump(), config={"run_name": f"API-Chat-Request: {session_id}"})
     except Exception as e:
         logger.error("Workflow execution failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"处理失败: {e}")
@@ -82,13 +102,10 @@ async def chat(req: ChatRequest) -> ChatResponse:
     # 持久化到 Redis
     persist_data = final_state.model_dump(exclude={"user_message", "user_attachments", "current_intent",
                                                      "execution_plan", "reply_message", "triggered_agents"})
-    store.save_state(persist_data)
+    await _asave_state(store, persist_data)
 
-    # 异步持久化到 MySQL（关键数据）
-    try:
-        _persist_to_mysql(final_state)
-    except Exception as e:
-        logger.error("MySQL persistence failed: %s", e, exc_info=True)
+    # 后台持久化到 MySQL，避免同步阻塞请求主链。
+    background_tasks.add_task(_persist_to_mysql_safe, final_state)
 
     return ChatResponse(
         session_id=session_id,
@@ -146,3 +163,15 @@ def _persist_to_mysql(state: CopilotState) -> None:
             {"interview_qa": [qa.model_dump() for qa in state.interview_qa]},
             len(state.interview_qa),
         )
+
+
+async def _persist_to_mysql_async(state: CopilotState) -> None:
+    """异步包装 MySQL 持久化，底层仍复用同步客户端。"""
+    await asyncio.to_thread(_persist_to_mysql, state)
+
+
+async def _persist_to_mysql_safe(state: CopilotState) -> None:
+    try:
+        await _persist_to_mysql_async(state)
+    except Exception as e:
+        logger.error("MySQL persistence failed: %s", e, exc_info=True)

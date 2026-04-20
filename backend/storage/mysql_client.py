@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from typing import Any
@@ -62,6 +63,9 @@ class MySQLStore:
         finally:
             conn.close()
         logger.debug("Upserted session %s", session_id)
+
+    async def aupsert_session(self, session_id: str, status: str = "active") -> None:
+        await asyncio.to_thread(self.upsert_session, session_id, status)
 
     # ---- generic JSON table helpers ----
     def _upsert_json(self, table: str, row_id: str, session_id: str, data: dict, version: int = 1,
@@ -131,11 +135,17 @@ class MySQLStore:
     def save_job(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
         self._upsert_json("jobs", row_id, session_id, data, version)
 
+    async def asave_job(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
+        await asyncio.to_thread(self.save_job, row_id, session_id, data, version)
+
     def get_job(self, session_id: str) -> dict | None:
         return self._get_by_session("jobs", session_id)
 
     def save_candidate_profile(self, row_id: str, session_id: str, data: dict) -> None:
         self._upsert_json("candidate_profiles", row_id, session_id, data)
+
+    async def asave_candidate_profile(self, row_id: str, session_id: str, data: dict) -> None:
+        await asyncio.to_thread(self.save_candidate_profile, row_id, session_id, data)
 
     def get_candidate_profile(self, session_id: str) -> dict | None:
         return self._get_by_session("candidate_profiles", session_id)
@@ -145,11 +155,18 @@ class MySQLStore:
         self._upsert_json("resume_contents", row_id, session_id, data, version,
                           extra_cols={"content_hash": content_hash})
 
+    async def asave_resume_content(self, row_id: str, session_id: str, data: dict, version: int = 1,
+                                   content_hash: str = "") -> None:
+        await asyncio.to_thread(self.save_resume_content, row_id, session_id, data, version, content_hash)
+
     def get_resume_content(self, session_id: str) -> dict | None:
         return self._get_by_session("resume_contents", session_id)
 
     def save_render_config(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
         self._upsert_json("render_configs", row_id, session_id, data, version)
+
+    async def asave_render_config(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
+        await asyncio.to_thread(self.save_render_config, row_id, session_id, data, version)
 
     def get_render_config(self, session_id: str) -> dict | None:
         return self._get_by_session("render_configs", session_id)
@@ -173,8 +190,24 @@ class MySQLStore:
         finally:
             conn.close()
 
+    async def asave_resume_html(self, row_id: str, session_id: str, html: str, version: int = 1,
+                                content_ver: int = 1, render_ver: int = 1, checksum: str = "") -> None:
+        await asyncio.to_thread(
+            self.save_resume_html,
+            row_id,
+            session_id,
+            html,
+            version,
+            content_ver,
+            render_ver,
+            checksum,
+        )
+
     def save_interview_qa(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
         self._upsert_json("interview_qas", row_id, session_id, data, version)
+
+    async def asave_interview_qa(self, row_id: str, session_id: str, data: dict, version: int = 1) -> None:
+        await asyncio.to_thread(self.save_interview_qa, row_id, session_id, data, version)
 
     def save_event(self, event: dict) -> None:
         now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -198,3 +231,6 @@ class MySQLStore:
             conn.commit()
         finally:
             conn.close()
+
+    async def asave_event(self, event: dict) -> None:
+        await asyncio.to_thread(self.save_event, event)

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import IntentClassificationOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
 from workflow.state import CopilotState
 from log import get_logger
@@ -40,6 +41,20 @@ def _classify_intent(state: CopilotState) -> IntentClassificationOutput:
     return result
 
 
+async def _classify_intent_async(state: CopilotState) -> IntentClassificationOutput:
+    """异步调用 LLM 进行意图分类。"""
+    prompt = INTENT_CLASSIFICATION_PROMPT.format(
+        has_job=state.job is not None,
+        has_profile=state.candidate_profile is not None,
+        has_resume=state.resume_content_json is not None,
+        user_message=state.user_message,
+    )
+    llm = get_llm()
+    result = await ainvoke_json_with_schema(llm, prompt, IntentClassificationOutput, logger, "Planner Agent")
+    logger.info("Intent classified: %s (reason: %s)", result.intent, result.reason)
+    return result
+
+
 def _build_execution_plan(intent: str, state: CopilotState) -> list[str]:
     """根据 intent 和当前状态构建执行计划。"""
     base_plan = _INTENT_PLAN.get(intent, [])
@@ -52,13 +67,13 @@ def _build_execution_plan(intent: str, state: CopilotState) -> list[str]:
     return list(base_plan)
 
 
-def planner_node(state: CopilotState) -> dict[str, Any]:
-    """Planner Agent 节点函数。"""
+async def planner_node_async(state: CopilotState) -> dict[str, Any]:
+    """Planner Agent 异步节点函数。"""
     logger.info("Planner Agent started for session %s", state.session_id)
 
     # 1. 意图分类
     try:
-        intent_result = _classify_intent(state)
+        intent_result = await _classify_intent_async(state)
     except RuntimeError as exc:
         logger.error("Planner Agent failed: %s", exc)
         return {
@@ -95,3 +110,8 @@ def planner_node(state: CopilotState) -> dict[str, Any]:
     })
 
     return updates
+
+
+def planner_node(state: CopilotState) -> dict[str, Any]:
+    """Planner Agent 同步兼容入口。"""
+    return asyncio.run(planner_node_async(state))

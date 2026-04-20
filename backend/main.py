@@ -88,10 +88,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     logger.info("Starting AI Career Copilot server on %s:%s", cfg["host"], cfg["port"])
+    is_debug = cfg.get("debug", False)
     uvicorn.run(
         "main:app",
         app_dir=str(BACKEND_DIR),
         host=cfg["host"],
         port=cfg["port"],
-        reload=cfg.get("debug", False),
+        reload=is_debug,
+        workers=1 if is_debug else 4,
     )

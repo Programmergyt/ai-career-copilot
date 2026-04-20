@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
 from agents.json_contracts import InterviewGenerationOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.interview_generation import INTERVIEW_GENERATION_PROMPT
 from workflow.state import CopilotState, InterviewQA
 from log import get_logger
@@ -28,8 +29,8 @@ def _build_interview_qa(parsed: InterviewGenerationOutput) -> list[InterviewQA]:
     return interview_qa
 
 
-def interview_node(state: CopilotState) -> dict[str, Any]:
-    """Interview Agent 节点函数。"""
+async def interview_node_async(state: CopilotState) -> dict[str, Any]:
+    """Interview Agent 异步节点函数。"""
     logger.info("Interview Agent started for session %s", state.session_id)
 
     if state.job is None or state.candidate_profile is None or state.resume_content_json is None:
@@ -46,7 +47,7 @@ def interview_node(state: CopilotState) -> dict[str, Any]:
     )
     llm = get_llm()
     try:
-        parsed = invoke_json_with_schema(llm, prompt, InterviewGenerationOutput, logger, "Interview Agent")
+        parsed = await ainvoke_json_with_schema(llm, prompt, InterviewGenerationOutput, logger, "Interview Agent")
     except RuntimeError as exc:
         logger.error("Interview Agent failed: %s", exc)
         return {
@@ -69,3 +70,8 @@ def interview_node(state: CopilotState) -> dict[str, Any]:
         "meta": meta,
         "reply_message": "面试问答已生成。请在右侧面试问答栏目查看最新内容。",
     }
+
+
+def interview_node(state: CopilotState) -> dict[str, Any]:
+    """Interview Agent 同步兼容入口。"""
+    return asyncio.run(interview_node_async(state))

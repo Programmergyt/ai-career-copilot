@@ -14,12 +14,14 @@ planner -> jd/profile -> content -> render -> full workflow。
 - 断言刻意保持“结构正确、语义宽松”，避免因真实模型措辞波动导致脆弱失败。
 
 执行命令：
-python -m pytest test/integration/test_real_llm_e2e.py -sv
+python -m pytest backend/test/integration/test_real_llm_e2e.py -sv
 """
 
 from __future__ import annotations
 
 import uuid
+
+import asyncio
 
 import pytest
 
@@ -99,12 +101,12 @@ def fixture_profile_text() -> str:
 
 @pytest.fixture(scope="module")
 def fixture_project_text() -> str:
-    return read_fixture_text("projects", "求职Agent_README.md")
+    return read_fixture_text("profiles", "求职Agent_README.md")
 
 
 @pytest.fixture(scope="module")
 def fixture_internship_text() -> str:
-    return read_fixture_text("internships", "远望工业智能实习——RAG诊断平台.md")
+    return read_fixture_text("profiles", "远望工业智能实习——RAG诊断平台.md")
 
 
 @pytest.fixture(scope="module")
@@ -280,7 +282,7 @@ def test_workflow_upload_jd_runs_end_to_end_with_real_llm(
 
     测试流程：
     1. 先准备好候选人画像，避免 upload_jd 场景因没有 profile 而只停在 jd_agent；
-    2. 编译 LangGraph 并调用 graph.invoke；
+    2. 编译 LangGraph 并调用 graph.ainvoke；
     3. 校验最终状态已经穿过 jd_agent、content_agent、render_agent。
 
     涉及的工作流路径：
@@ -296,10 +298,10 @@ def test_workflow_upload_jd_runs_end_to_end_with_real_llm(
     )
 
     # 这里测试的不再是单节点，而是 LangGraph 的真实条件路由与状态传播。
-    result = graph.invoke(
+    result = asyncio.run(graph.ainvoke(
         state.model_dump(),
         config={"run_name": "Integration-Workflow: Upload JD Real LLM"},
-    )
+    ))
     final_state = CopilotState.model_validate(result)
 
     assert final_state.current_intent == "upload_jd"
@@ -317,7 +319,7 @@ def test_workflow_upload_profile_runs_end_to_end_with_real_llm(
 
     测试流程：
     1. 先通过 jd_node 生成目标岗位，模拟“岗位已存在、用户继续补资料”的上下文；
-    2. 编译 LangGraph 并调用 graph.invoke；
+    2. 编译 LangGraph 并调用 graph.ainvoke；
     3. 校验最终状态已经产出 candidate_profile、resume_content_json 和 HTML。
 
     涉及的工作流路径：
@@ -332,10 +334,10 @@ def test_workflow_upload_profile_runs_end_to_end_with_real_llm(
         job=job,
     )
 
-    result = graph.invoke(
+    result = asyncio.run(graph.ainvoke(
         state.model_dump(),
         config={"run_name": "Integration-Workflow: Upload Profile Real LLM"},
-    )
+    ))
     final_state = CopilotState.model_validate(result)
 
     assert final_state.current_intent == "upload_profile"

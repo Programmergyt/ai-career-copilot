@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import JDAnalysisOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.jd_analysis import JD_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Job
 from log import get_logger
@@ -15,8 +16,8 @@ from log import get_logger
 logger = get_logger("agent")
 
 
-def jd_node(state: CopilotState) -> dict[str, Any]:
-    """JD Agent 节点函数。"""
+async def jd_node_async(state: CopilotState) -> dict[str, Any]:
+    """JD Agent 异步节点函数。"""
     logger.info("JD Agent started for session %s", state.session_id)
 
     jd_text = state.user_message
@@ -24,7 +25,7 @@ def jd_node(state: CopilotState) -> dict[str, Any]:
     prompt = JD_ANALYSIS_PROMPT.format(jd_text=jd_text)
     llm = get_llm()
     try:
-        parsed = invoke_json_with_schema(llm, prompt, JDAnalysisOutput, logger, "JD Agent")
+        parsed = await ainvoke_json_with_schema(llm, prompt, JDAnalysisOutput, logger, "JD Agent")
     except RuntimeError as exc:
         logger.error("JD Agent failed: %s", exc)
         return {
@@ -71,3 +72,8 @@ def jd_node(state: CopilotState) -> dict[str, Any]:
         "meta": meta,
         "reply_message": f"已解析岗位：{job.title}（{job.industry}）",
     }
+
+
+def jd_node(state: CopilotState) -> dict[str, Any]:
+    """JD Agent 同步兼容入口。"""
+    return asyncio.run(jd_node_async(state))

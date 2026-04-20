@@ -32,6 +32,9 @@ class PromptRouterLLM:
     def bind(self, **kwargs):
         return self
 
+    async def ainvoke(self, prompt):
+        return self.invoke(prompt)
+
     def invoke(self, prompt):
         text = prompt if isinstance(prompt, str) else str(prompt)
 

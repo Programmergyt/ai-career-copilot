@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from workflow.graph import compile_graph
@@ -58,7 +60,10 @@ def test_workflow_upload_jd_runs_to_render(monkeypatch, fixture_jd_text):
     # 1. 真实 JD fixture 文本；
     # 2. 一个最小候选人画像，只提供姓名，确保 content/render 阶段可继续执行。
     # 这里不会访问 config.yaml 中配置的真实 LLM API，因为 get_llm 已被 monkeypatch。
-    result = graph.invoke(state.model_dump(), config={"run_name": "Test-Workflow: Upload JD to Render"})
+    result = asyncio.run(graph.ainvoke(
+        state.model_dump(),
+        config={"run_name": "Test-Workflow: Upload JD to Render"},
+    ))
     final_state = CopilotState.model_validate(result)
 
     assert final_state.current_intent == "upload_jd"
@@ -94,7 +99,10 @@ def test_workflow_upload_profile_runs_to_render(monkeypatch, fixture_jd_text, fi
     # 1. 真实的个人资料文本；
     # 2. 预置好的 job，上下文明确目标岗位，允许 content_agent 直接生成简历内容。
     # trace 重点反映 workflow 的状态流转，不代表真实模型按输入逐字抽取了所有内容。
-    result = graph.invoke(state.model_dump(), config={"run_name": "Test-Workflow: Upload Profile to Render"})
+    result = asyncio.run(graph.ainvoke(
+        state.model_dump(),
+        config={"run_name": "Test-Workflow: Upload Profile to Render"},
+    ))
     final_state = CopilotState.model_validate(result)
 
     assert final_state.current_intent == "upload_profile"

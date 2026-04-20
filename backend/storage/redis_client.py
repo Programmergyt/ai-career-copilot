@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -58,28 +59,49 @@ class RedisSessionStore:
         self._client.set(key, json.dumps(state, ensure_ascii=False, default=str), ex=self.ttl)
         logger.debug("Saved state for session %s", self.session_id)
 
+    async def asave_state(self, state: dict[str, Any]) -> None:
+        await asyncio.to_thread(self.save_state, state)
+
     def load_state(self) -> dict[str, Any] | None:
         data = self._client.get(self._state_key())
         if data is None:
             return None
         return json.loads(data)
 
+    async def aload_state(self) -> dict[str, Any] | None:
+        return await asyncio.to_thread(self.load_state)
+
     def delete_state(self) -> None:
         self._client.delete(self._state_key(), self._events_key())
         logger.info("Deleted state for session %s", self.session_id)
+
+    async def adelete_state(self) -> None:
+        await asyncio.to_thread(self.delete_state)
 
     # ---- events ----
     def append_event(self, event: dict[str, Any]) -> None:
         self._client.rpush(self._events_key(), json.dumps(event, ensure_ascii=False, default=str))
         self._client.expire(self._events_key(), self.ttl)
 
+    async def aappend_event(self, event: dict[str, Any]) -> None:
+        await asyncio.to_thread(self.append_event, event)
+
     def get_events(self) -> list[dict[str, Any]]:
         raw = self._client.lrange(self._events_key(), 0, -1)
         return [json.loads(item) for item in raw]
+
+    async def aget_events(self) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self.get_events)
 
     # ---- distributed lock ----
     def acquire_lock(self, timeout: int = 30) -> bool:
         return bool(self._client.set(self._lock_key(), "1", nx=True, ex=timeout))
 
+    async def aacquire_lock(self, timeout: int = 30) -> bool:
+        return await asyncio.to_thread(self.acquire_lock, timeout)
+
     def release_lock(self) -> None:
         self._client.delete(self._lock_key())
+
+    async def arelease_lock(self) -> None:
+        await asyncio.to_thread(self.release_lock)

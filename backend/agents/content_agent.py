@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import ResumeGenerationOutput
-from models.llm import get_llm, invoke_json_with_schema
+from models.llm import get_llm, ainvoke_json_with_schema, invoke_json_with_schema
 from prompts.resume_generation import RESUME_GENERATION_PROMPT, RESUME_SECTION_UPDATE_PROMPT
 from workflow.state import (
     CopilotState, ResumeContent, ResumeProfile, ResumeContentMeta,
@@ -81,8 +82,8 @@ def _build_resume_from_parsed(parsed: ResumeGenerationOutput, state: CopilotStat
     )
 
 
-def content_node(state: CopilotState) -> dict[str, Any]:
-    """Resume Content Agent 节点函数。"""
+async def content_node_async(state: CopilotState) -> dict[str, Any]:
+    """Resume Content Agent 异步节点函数。"""
     logger.info("Resume Content Agent started for session %s", state.session_id)
 
     intent = state.current_intent
@@ -111,7 +112,7 @@ def content_node(state: CopilotState) -> dict[str, Any]:
         )
 
     try:
-        parsed = invoke_json_with_schema(llm, prompt, ResumeGenerationOutput, logger, "Resume Content Agent")
+        parsed = await ainvoke_json_with_schema(llm, prompt, ResumeGenerationOutput, logger, "Resume Content Agent")
     except RuntimeError as exc:
         logger.error("Resume Content Agent failed: %s", exc)
         return {
@@ -138,3 +139,8 @@ def content_node(state: CopilotState) -> dict[str, Any]:
         "meta": meta,
         "reply_message": f"简历内容已生成（v{resume_content.meta.version}）。请在右侧简历预览栏目查看最新内容。",
     }
+
+
+def content_node(state: CopilotState) -> dict[str, Any]:
+    """Resume Content Agent 同步兼容入口。"""
+    return asyncio.run(content_node_async(state))
