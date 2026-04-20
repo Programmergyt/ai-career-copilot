@@ -172,7 +172,7 @@ def get_fastapi_config() -> dict:
         "host": _resolve_env_override("FASTAPI_HOST", cfg.get("host", "0.0.0.0")),
         "port": _resolve_int_override("FASTAPI_PORT", cfg.get("port", 8000)),
         "debug": _resolve_env_override("FASTAPI_DEBUG", str(cfg.get("debug", False))).lower() in {"1", "true", "yes", "on"},
-        "workers": _resolve_int_override("FASTAPI_WORKERS", cfg.get("workers", 4)),
+        "workers": _resolve_int_override("FASTAPI_WORKERS", cfg.get("workers", 2)),
     }
 
 
