@@ -87,3 +87,4 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
 def gap_node(state: CopilotState) -> dict[str, Any]:
     """Gap Analysis Agent 同步兼容入口。"""
     return asyncio.run(gap_node_async(state))
+

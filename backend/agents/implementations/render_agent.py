@@ -58,7 +58,6 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
     intent = state.current_intent
     render_config = state.render_config
 
-    # 渲染指令 → 先更新 render_config
     if intent == "render_edit":
         try:
             render_config = await _update_render_config_from_llm_async(state)
@@ -69,13 +68,11 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
             }
         logger.info("Render config updated to v%d", render_config.version)
     else:
-        # 内容更新触发，只递增版本
         render_config = render_config.model_copy(update={
             "version": render_config.version + 1,
             "last_render_reason": "内容更新触发渲染",
         })
 
-    # 生成 HTML
     resume_content = state.resume_content_json
     if resume_content is None:
         return {
@@ -121,3 +118,4 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
 def render_node(state: CopilotState) -> dict[str, Any]:
     """Resume Render Agent 同步兼容入口。"""
     return asyncio.run(render_node_async(state))
+

@@ -90,14 +90,12 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
     llm = get_llm()
 
     if intent == "content_edit" and state.resume_content_json:
-        # 局部更新
         prompt = RESUME_SECTION_UPDATE_PROMPT.format(
             current_resume_json=state.resume_content_json.model_dump_json(indent=2),
             job_json=state.job.model_dump_json(indent=2) if state.job else "{}",
             edit_instruction=state.user_message,
         )
     else:
-        # 全量生成
         job_json = state.job.model_dump_json(indent=2) if state.job else "{}"
         profile_json = state.candidate_profile.model_dump_json(indent=2) if state.candidate_profile else "{}"
 
@@ -144,3 +142,4 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
 def content_node(state: CopilotState) -> dict[str, Any]:
     """Resume Content Agent 同步兼容入口。"""
     return asyncio.run(content_node_async(state))
+

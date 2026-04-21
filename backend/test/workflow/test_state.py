@@ -7,7 +7,20 @@ from workflow.state import (
     ResumeContent, ResumeProfile, ResumeContentMeta, SectionItem, Education,
     RenderConfig, PageMargin, ResumeHtml, Gap, Question, InterviewQA,
     ConversationEvent, Meta, DirtyFlags, PendingAction,
+    ExecutionStep, StepResult, ContractViolation,
 )
+
+
+def _dump(model):
+    return model.model_dump() if hasattr(model, "model_dump") else model.dict()
+
+
+def _copy(model, **kwargs):
+    return model.model_copy(**kwargs) if hasattr(model, "model_copy") else model.copy(**kwargs)
+
+
+def _validate(model_cls, data):
+    return model_cls.model_validate(data) if hasattr(model_cls, "model_validate") else model_cls.parse_obj(data)
 
 
 class TestCopilotStateDefaults:
@@ -24,6 +37,10 @@ class TestCopilotStateDefaults:
         assert state.conversation_events == []
         assert state.user_message == ""
         assert state.execution_plan == []
+        assert state.execution_steps == []
+        assert state.active_plan_id == ""
+        assert state.step_results == []
+        assert state.contract_violations == []
 
     def test_state_with_session_id(self):
         state = CopilotState(session_id="test_session_001")
@@ -49,10 +66,10 @@ class TestJobModel:
 
     def test_job_serialization(self):
         job = Job(id="j1", title="test")
-        data = job.model_dump()
+        data = _dump(job)
         assert data["id"] == "j1"
         assert data["title"] == "test"
-        restored = Job.model_validate(data)
+        restored = _validate(Job, data)
         assert restored.id == "j1"
 
 
@@ -187,8 +204,8 @@ class TestMeta:
 
     def test_dirty_flags_update(self):
         meta = Meta()
-        updated = meta.model_copy(update={
-            "dirty_flags": meta.dirty_flags.model_copy(update={"content_dirty": True})
+        updated = _copy(meta, update={
+            "dirty_flags": _copy(meta.dirty_flags, update={"content_dirty": True})
         })
         assert updated.dirty_flags.content_dirty is True
         assert updated.dirty_flags.render_dirty is False
@@ -207,9 +224,36 @@ class TestStateRoundTrip:
             user_message="测试消息",
             current_intent="upload_jd",
             execution_plan=["jd_agent"],
+            execution_steps=[
+                ExecutionStep(
+                    step_id="step_1",
+                    agent="jd_agent",
+                    reads=["user_message"],
+                    writes=["job"],
+                )
+            ],
+            step_results=[
+                StepResult(
+                    step_id="step_1",
+                    agent="jd_agent",
+                    status="success",
+                    latency_ms=12,
+                    writes=["job"],
+                )
+            ],
+            contract_violations=[
+                ContractViolation(
+                    agent="jd_agent",
+                    field="resume_html",
+                    reason="write_not_allowed_by_contract",
+                )
+            ],
         )
-        data = state.model_dump()
-        restored = CopilotState.model_validate(data)
+        data = _dump(state)
+        restored = _validate(CopilotState, data)
         assert restored.session_id == "sess_test"
         assert restored.job.title == "测试岗位"
         assert restored.candidate_profile.profile_basic.name == "测试用户"
+        assert restored.execution_steps[0].agent == "jd_agent"
+        assert restored.step_results[0].status == "success"
+        assert restored.contract_violations[0].field == "resume_html"

@@ -75,3 +75,4 @@ async def interview_node_async(state: CopilotState) -> dict[str, Any]:
 def interview_node(state: CopilotState) -> dict[str, Any]:
     """Interview Agent 同步兼容入口。"""
     return asyncio.run(interview_node_async(state))
+

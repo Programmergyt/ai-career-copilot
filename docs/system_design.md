@@ -35,7 +35,7 @@ ai-career-copilot/
 │   ├── main.py                # FastAPI 入口
 │   ├── config.yaml            # 全局配置
 │   ├── config_loader.py       # 配置加载
-│   ├── agents/                # Agent 实现
+│   ├── agents/                # Agent 实现、契约、注册中心、统一运行时
 │   ├── api/                   # API 路由
 │   ├── log/                   # 日志模块
 │   ├── models/                # LLM / Embedding / Rerank 工厂
@@ -66,21 +66,16 @@ FastAPI /api/chat
 Planner Agent
   ├─ Intent Classifier → intent
   ├─ State Diff Planner → execution_plan
-  └─ Execution Orchestrator
-       ↓
-     JD Agent → state.job
-       ↓
-     Profile Agent → state.candidate_profile
-       ↓
-     Gap Analysis Agent → state.gaps, state.questions_to_ask
-       ↓
-     Resume Content Agent → state.resume_content_json
-       ↓
-     Resume Render Agent → state.render_config, state.resume_html
-       ↓
-     Interview Agent → state.interview_qa
-       ↓
-  Planner Agent → state.conversation_events, state.meta
+  └─ Execution Metadata Builder → execution_steps
+  ↓
+LangGraph 固定节点图
+  ↓
+Agent Runtime
+  ├─ Registry 查找 Agent 实现
+  ├─ Contract 校验 reads / writes
+  └─ 执行节点并返回 patch
+  ↓
+JD / Profile / Gap / Content / Render / Interview Agent
   ↓
 返回响应（含所有更新后的状态字段）
 ```
@@ -329,6 +324,52 @@ CREATE TABLE conversation_events (
 | asyncio.Semaphore | 限制 LLM 并发调用数 |
 | Redis 分布式锁 | 防止同一 session 并发写入状态 |
 | Resume Render Agent 幂等 | 相同 content_version + render_version 不重复渲染 |
+
+---
+
+## 6.1 当前阶段的模块化解耦设计
+
+当前实现采用“先统一 Agent 接入层，再替换编排器”的渐进路线。
+
+### 6.1.1 `contracts.py`
+
+职责：
+
+- 声明每个 Agent 的 `allowed_reads`
+- 声明每个 Agent 的 `allowed_writes`
+- 声明支持的 intent / action
+- 为 runtime 校验和测试提供单一事实源
+
+### 6.1.2 `registry.py`
+
+职责：
+
+- 提供 `agent_name -> callable` 的统一注册与获取能力
+- 降低 workflow 对具体实现文件的硬编码依赖
+- 为后续替换某个 Agent 实现保留接缝
+
+### 6.1.3 `runtime.py`
+
+职责：
+
+- 在调用具体 Agent 前进行 contract 级前置校验
+- 在 Agent 返回 patch 后校验写入字段是否越权
+- 统一记录执行耗时、异常和 contract violation
+
+### 6.1.4 `state.py` 的最小增量字段
+
+当前阶段只新增运行时元数据，不改变现有持久化主结构：
+
+- `execution_steps`
+- `active_plan_id`
+- `step_results`
+- `contract_violations`
+
+其中：
+
+- `execution_plan` 仍然负责实际路由
+- `execution_steps` 仅作为结构化镜像
+- `step_results` 和 `contract_violations` 主要服务于调试和测试
 
 ---
 

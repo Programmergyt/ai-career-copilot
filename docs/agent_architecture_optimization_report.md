@@ -1,6 +1,7 @@
 # Agent 架构优化分析报告（Plan Mode + 模块化解耦）
 
 > 目标：在现有设计基础上，将“固定链路编排”升级为“更灵活的 Plan Mode”，并将各个 Agent 模块化、可插拔、彼此解耦。
+> 目前运行环境：` (D:\Anaconda\shell\condabin\conda-hook.ps1) ; (conda activate rag_workflow)`
 
 ---
 
@@ -453,22 +454,295 @@ backend/
 
 ---
 
-## 17. 最小可执行改造顺序（两周版本）
+## 17. 最小可执行改造顺序
 
-### Week 1
+### 可行性判断
 
-1. 完成 `plan_schema.py`、`contracts.py`、`registry.py`。
-2. Planner 仍生成旧 `execution_plan`，同时镜像生成 `execution_steps`。
-3. Validator 仅日志告警，不阻断主流程。
+如果本轮目标明确限定为“**先完成 Agent 模块解耦，必要时小幅调整 state，但暂不改当前 workflow 图结构**”，则可行性较高，原因如下：
 
-### Week 2
+1. `backend/agents/*.py` 已基本满足“节点函数输入 state、输出 patch”的统一形态，天然适合包一层 runtime/contract。
+2. 当前 `workflow/graph.py` 虽然路由固定，但它依赖的其实只是节点名与 `execution_plan`，并不阻止先把 Agent 实现从“直接 import 调用”升级为“注册 + 能力声明 + 统一执行包装”。
+3. `workflow/state.py` 当前运行时字段较少，但只需增加少量元数据字段，就能支撑 contract 校验、step 观测和后续平滑切换，而不必现在就引入完整 DAG executor。
 
-1. 上线串行 `plan_executor.py`（feature flag 灰度）。
-2. Graph 切到 `planner -> executor -> respond`（保留旧图 fallback）。
-3. 接入 `plan_runs/step_runs` 落库与 LangSmith trace 关联。
+需要注意的边界：
 
-验收标准：
+- 这一阶段不要同时推进 `graph.py` 大改，否则会把“Agent 解耦”和“编排重构”两个变量绑在一起，回归风险明显上升。
+- `state` 可以改，但应以“补充运行时元信息”为主，不要先把 `execution_plan` 全量替换成复杂 Step DAG。
 
-- 对现有 `upload_jd/upload_profile/content_edit/render_edit` 行为回归无差异。
-- 新增复合指令（content_edit + render_edit）可在单轮生成两步以上 plan。
-- step 级错误可观测，且失败不导致整轮状态污染。
+### 建议按模块拆分的最小顺序
+
+### Module 1：先固化 Agent Contract
+
+1. 新增 `backend/agents/contracts.py`。
+2. 为现有 `jd/profile/gap/content/render/interview` 六个 Agent 声明：
+   - `agent_name`
+   - `supported_intents` 或 `supported_actions`
+   - `allowed_reads`
+   - `allowed_writes`
+   - `default_retryable`
+   - `idempotent`（先可选）
+3. 第一阶段只做“声明落地”，不改业务逻辑。
+
+这一模块完成后的收益是：先把“文档里的职责边界”变成代码里的显式契约，为后面的 runtime 校验打底。
+
+### Module 2：引入 Registry，但不改 Graph 形态
+
+1. 新增 `backend/agents/registry.py`。
+2. 将当前各节点函数注册为：
+   - `jd_agent -> jd_node_async`
+   - `profile_agent -> profile_node_async`
+   - `gap_agent -> gap_node_async`
+   - `content_agent -> content_node_async`
+   - `render_agent -> render_node_async`
+   - `interview_agent -> interview_node_async`
+3. `graph.py` 先保持现有节点拓扑不变，只把内部调用入口改成“从 registry 取 agent 运行”或为后续切换预留兼容层。
+
+这一层的目标不是动态编排，而是先去掉“编排层直接绑定具体实现文件”的硬耦合。
+
+### Module 3：补一层 Agent Runtime Adapter
+
+1. 新增 `backend/agents/runtime.py`。
+2. 对每个 Agent 执行统一做三件事：
+   - 运行前按 contract 校验最小必需输入是否存在
+   - 执行后检查返回 patch 的写入字段是否越权
+   - 统一包装日志、异常、耗时和失败返回
+3. 当前 `graph.py` 仍按原节点顺序走，但节点内部不再“裸调 agent 函数”，而是走 runtime。
+
+这一层是本轮最关键的解耦点。做完之后，后续无论是保留固定图，还是改成 executor，Agent 接入方式都已经统一了。
+
+### Module 4：对 State 做最小增量改造
+
+建议只加运行时字段，不动现有持久化主结构：
+
+1. 在 `backend/workflow/state.py` 增加：
+   - `execution_steps: list[dict[str, Any]] = []`
+   - `active_plan_id: str = ""`
+   - `step_results: list[dict[str, Any]] = []`
+   - `contract_violations: list[dict[str, Any]] = []`
+2. 保留现有 `execution_plan: list[str]` 作为 graph 路由唯一依据。
+3. `execution_steps` 在这一阶段只做“镜像元数据”，例如：
+   - `step_id`
+   - `agent`
+   - `status`
+   - `reads`
+   - `writes`
+
+这样可以做到：workflow 不变，但 plan/step 级数据已经开始沉淀，为下一阶段 executor 化做兼容准备。
+
+### Module 5：轻量拆分 Planner，但先不引入新 Executor
+
+1. 保留 `backend/agents/planner.py` 对外节点入口不变。
+2. 先把内部逻辑拆成两个私有层次：
+   - intent classify
+   - plan metadata build
+3. 当前仍输出 `execution_plan` 给 graph 路由。
+4. 同时补充生成 `execution_steps`，但仅作为镜像，不参与实际调度。
+
+这一步的重点不是“计划驱动执行”，而是先把 Planner 从“只吐字符串数组”升级为“同时吐一份结构化计划草案”。
+
+### Module 6：补齐观测与回归测试
+
+1. 优先新增测试，而不是先改数据库：
+   - contract 校验测试
+   - registry 注册测试
+   - runtime patch 越权拦截测试
+   - planner 输出 `execution_plan + execution_steps` 的兼容测试
+2. 观测先落日志和内存态：
+   - step 开始/结束
+   - latency
+   - contract violation
+3. `plan_runs/step_runs` 落库可以放到下一小阶段，不必和 Agent 解耦绑定上线。
+
+这样能把本轮范围收紧在“运行时边界清晰化”，而不是过早进入存储和编排联动改造。
+
+### 本轮完成后的验收标准
+
+1. `workflow/graph.py` 拓扑与现有行为保持一致，`upload_jd / upload_profile / content_edit / render_edit / ask_question` 回归无差异。
+2. 所有业务 Agent 都能通过统一 `contract + registry + runtime` 接入。
+3. Agent 返回 patch 时，运行时可以识别越权写入并记录告警或阻断。
+4. Planner 除了输出旧 `execution_plan` 外，还能稳定输出结构化 `execution_steps` 元数据。
+5. 新增或替换某个 Agent 实现时，不需要再去改 graph 路由逻辑，只需改注册与 contract。
+
+### 下一阶段再做的事
+
+等上述 6 个模块稳定后，再进入下一轮：
+
+1. 将 `execution_steps` 从“镜像元数据”升级为真正执行输入。
+2. 引入串行 `plan_executor.py`。
+3. 再把 `graph.py` 从“多 route 函数”收敛为 `planner -> executor -> respond`。
+
+这样改造路径会更稳：先解耦 Agent，再替换编排器，而不是两者同时动。
+
+---
+
+## 18. Module 5-6 完成情况（截至当前代码基线）
+
+本节记录当前代码已经完成的范围，作为后续真正进入 Plan Mode 改造的起点。
+
+### 18.1 Module 5 已完成内容
+
+当前 `backend/agents/planner.py` 已完成从“只输出 `execution_plan`”到“输出 `execution_plan + execution_steps + active_plan_id`”的升级，但仍保持旧 workflow 的兼容行为不变：
+
+1. 继续使用旧的 intent 分类逻辑。
+2. 继续输出 `execution_plan: list[str]`，供 `workflow/graph.py` 现有路由使用。
+3. 新增输出：
+   - `active_plan_id`
+   - `execution_steps`
+4. `execution_steps` 当前仅作为镜像元数据，包含：
+   - `step_id`
+   - `agent`
+   - `status`
+   - `reads`
+   - `writes`
+
+这意味着当前系统已经具备了“计划元数据显式化”的第一步，但尚未进入“计划驱动执行”。
+
+### 18.2 Module 6 已完成内容
+
+当前代码已具备一套不依赖数据库的最小观测与回归测试骨架：
+
+1. `backend/agents/runtime.py` 已统一记录：
+   - step 执行成功
+   - step 执行失败
+   - contract violation
+2. `backend/workflow/state.py` 已增加：
+   - `step_results`
+   - `contract_violations`
+3. 已新增或补充测试覆盖：
+   - contract 声明与 registry 注册
+   - runtime 越权写入拦截
+   - runtime 异常封装
+   - state 新运行时字段序列化
+   - planner 输出 `execution_plan + execution_steps` 的兼容测试
+
+### 18.3 当前阶段明确未做的事
+
+为控制范围，以下事项仍然刻意留在下一阶段：
+
+1. 不新增 `plan_runs / step_runs` 数据库表。
+2. 不修改 `backend/sql/init_schema.sql`。
+3. 不把 `execution_steps` 作为真实执行输入。
+4. 不引入 `plan_executor.py`。
+5. 不重写 `workflow/graph.py` 的固定路由结构。
+
+这个边界是合理的，因为当前新增的 `execution_steps / step_results / contract_violations / active_plan_id` 都属于运行时元数据，并未进入现有持久化主链路。
+
+---
+
+## 19. 基于当前基线，真正切换到 Plan Mode 的推荐流程
+
+在当前基础上，后续应采用“**先让 execution_steps 可验证，再让 execution_steps 可执行，最后再收敛 workflow 图**”的顺序，而不是一步到位重写。
+
+### Phase A：把 `execution_steps` 从镜像元数据升级为可校验对象
+
+目标：先让 Planner 产出的 step 元数据具备足够语义，但暂时仍不负责执行。
+
+建议动作：
+
+1. 新增 `backend/workflow/plan_mode/plan_schema.py`
+   - 定义 `Plan`
+   - 定义 `PlanStep`
+   - 定义 `PlanPolicy`
+2. 将当前 `ExecutionStep` 逐步对齐到 `PlanStep`，补充字段：
+   - `depends_on`
+   - `preconditions`
+   - `retry`
+   - `intent`
+   - `action`
+3. 新增 `backend/workflow/plan_mode/plan_validator.py`
+   - 校验 step 写入字段是否超出 contract
+   - 校验依赖闭环
+   - 校验同层写冲突
+
+这一步完成后，Planner 产出的就不只是“能看”的镜像，而是“能被静态检查”的执行草案。
+
+### Phase B：引入串行 `plan_executor.py`，但先不替换 graph
+
+目标：先在代码中建立真正的 plan 执行器，再决定是否切图。
+
+建议动作：
+
+1. 新增 `backend/workflow/plan_mode/plan_executor.py`
+2. 第一版 executor 只做串行执行：
+   - 按 `execution_steps` 顺序取 step
+   - 通过 registry + runtime 调 agent
+   - 聚合 step 结果
+3. executor 输出继续回写现有 state：
+   - `step_results`
+   - `contract_violations`
+   - 业务字段 patch
+
+关键原则：
+
+- 这一阶段 executor 的行为必须和现有 graph 固定链路等价。
+- 先做 feature flag 或 shadow mode，避免一上来替换主链路。
+
+### Phase C：把 graph 从“节点路由图”收敛为“planner -> executor -> respond”
+
+目标：在 executor 行为稳定后，才真正替换编排骨架。
+
+建议动作：
+
+1. `planner` 输出完整 `Plan`
+2. `graph.py` 缩减为：
+   - `planner`
+   - `executor`
+   - `respond`
+3. 原 `_route_after_xxx` 系列函数逐步下线
+
+这样做的收益：
+
+- 新增 Agent 不再需要增加新的 route 函数
+- 编排复杂度从图路由转移到 Plan/Executor，更便于测试
+
+### Phase D：支持复合任务与有限并行
+
+目标：真正体现 Plan Mode 的价值，而不是仅仅换一种串行写法。
+
+建议动作：
+
+1. Intent 层从单 intent 升级为 task bundle
+2. Planner 支持单轮输出多个 step 分支
+3. 对无写冲突步骤引入有限并行
+4. 为并行步骤补充：
+   - merge 策略
+   - 冲突策略
+   - retry 策略
+
+到这一步，系统才算真正进入 Plan Mode，而不是“带 step 元数据的旧流程”。
+
+### Phase E：最后再接入数据库级 plan observability
+
+数据库改造应当放在 executor 稳定之后，而不是现在提前做。
+
+建议动作：
+
+1. 在 `backend/sql/init_schema.sql` 中新增：
+   - `plan_runs`
+   - `step_runs`
+2. 在 `backend/storage/mysql_client.py` 中新增：
+   - `save_plan_run`
+   - `save_step_run`
+3. 在 `backend/api/chat.py` 中补充后台写库
+
+理由：
+
+- 如果现在就建表，字段设计会很容易随着 executor 设计变化而反复修改。
+- 等 `PlanStep`、executor、错误分类稳定后再落库，数据模型会更稳。
+
+---
+
+## 20. 推荐的后续实施顺序（Plan Mode 真正落地版）
+
+基于当前已完成的 Module 1-6，建议后续严格按下面顺序推进：
+
+1. 定义 `plan_schema.py`，统一 `Plan / PlanStep / PlanPolicy`。
+2. 实现 `plan_validator.py`，让 `execution_steps` 先可校验。
+3. 让 Planner 输出从“镜像 step”升级为“标准 PlanStep 草案”。
+4. 实现串行 `plan_executor.py`，通过 feature flag 或 shadow mode 验证与旧 graph 等价。
+5. 等 executor 稳定后，再把 `graph.py` 收敛为 `planner -> executor -> respond`。
+6. 最后补 `plan_runs / step_runs` 持久化、API 返回摘要和可视化。
+
+一句话概括就是：
+
+**当前代码已经完成了“Plan Mode 的前置解耦层”，下一阶段不要急着上数据库，应该先把 Plan 的 schema、validator 和 executor 真正建立起来。**

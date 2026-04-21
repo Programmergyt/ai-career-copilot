@@ -11,13 +11,7 @@ from typing import Any
 from langgraph.graph import StateGraph, END
 
 from workflow.state import CopilotState
-from agents.planner import planner_node_async
-from agents.jd_agent import jd_node_async
-from agents.profile_agent import profile_node_async
-from agents.gap_agent import gap_node_async
-from agents.content_agent import content_node_async
-from agents.render_agent import render_node_async
-from agents.interview_agent import interview_node_async
+from agents.runtime import make_runtime_node
 from log import get_logger
 
 logger = get_logger("agent")
@@ -80,13 +74,13 @@ def build_graph() -> StateGraph:
     graph = StateGraph(CopilotState)
 
     # 添加节点
-    graph.add_node("planner", planner_node_async)
-    graph.add_node("jd_agent", jd_node_async)
-    graph.add_node("profile_agent", profile_node_async)
-    graph.add_node("gap_agent", gap_node_async)
-    graph.add_node("content_agent", content_node_async)
-    graph.add_node("render_agent", render_node_async)
-    graph.add_node("interview_agent", interview_node_async)
+    graph.add_node("planner", make_runtime_node("planner"))
+    graph.add_node("jd_agent", make_runtime_node("jd_agent"))
+    graph.add_node("profile_agent", make_runtime_node("profile_agent"))
+    graph.add_node("gap_agent", make_runtime_node("gap_agent"))
+    graph.add_node("content_agent", make_runtime_node("content_agent"))
+    graph.add_node("render_agent", make_runtime_node("render_agent"))
+    graph.add_node("interview_agent", make_runtime_node("interview_agent"))
     graph.add_node("respond", _respond)
 
     # 入口

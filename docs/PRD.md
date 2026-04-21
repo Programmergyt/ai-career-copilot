@@ -364,7 +364,7 @@ AI Job Copilot
 
 | Agent | 职责 |
 |-------|------|
-| Planner Agent | 意图分类、执行计划生成、Agent 调度 |
+| Planner Agent | 意图分类、执行计划生成、执行元数据生成 |
 | JD Agent | 解析 JD，输出结构化 `job` |
 | Profile Agent | 解析用户材料，输出结构化 `candidate_profile` |
 | Gap Analysis Agent | 对比 job 与 profile，输出 `gaps` 和 `questions_to_ask` |
@@ -389,7 +389,7 @@ AI Job Copilot
 
 **State Diff Planner** — 判断本轮输入影响哪些状态字段，输出最小执行计划。
 
-**Execution Orchestrator** — 顺序调度 Agent，记录事件流，管理失败回退。
+**Execution Metadata Builder** — 基于最小执行计划补充结构化 step 元数据，用于后续 executor 化和 step 级观测。
 
 ## 5.3 JD Agent
 
@@ -465,6 +465,12 @@ AI Job Copilot
 | 用户要求"更突出某能力" | Resume Content Agent → Resume Render Agent |
 | 用户查询匹配度 | Gap Analysis Agent（不重跑全链路）|
 
+说明：
+
+- 当前阶段仍使用固定 LangGraph 节点图执行这些链路。
+- 不在这一阶段引入统一 `plan_executor`。
+- 先完成 Agent 模块解耦，再进入编排器重构。
+
 ## 6.2 局部更新原则
 
 - 内容未变时，只重渲染 HTML
@@ -506,8 +512,10 @@ Backend (FastAPI)
   ↓
 Conversation API / Session API
   ↓
-Agent Orchestrator (LangGraph)
+Agent Orchestrator (LangGraph 固定图)
   ↓
+├── Planner: intent + execution_plan + execution_steps
+├── Agent Runtime: contract 校验 + registry 查找 + 执行包装
 ├── Content Pipeline: JD Agent → Profile Agent → Gap Analysis Agent → Resume Content Agent
 ├── Render Pipeline: Resume Render Agent
 └── Interview Pipeline: Interview Agent
@@ -641,3 +649,8 @@ Storage: Redis + MySQL + 本地临时文件
 ### 可追踪性
 
 - 每次输入在事件流中记录：`intent → affected_state → triggered_agents`
+
+### 架构演进约束
+
+- 当前阶段完成后，新增或替换某个 Agent 实现时，不需要改 workflow 路由，只需要修改 contract 与 registry
+- `execution_steps` 可以稳定产出，但不会在这一阶段直接驱动执行

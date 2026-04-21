@@ -95,8 +95,12 @@ def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
 
     updates = planner_node(state)
 
+    assert updates["active_plan_id"].startswith("plan_")
     assert updates["current_intent"] == "upload_jd"
     assert updates["execution_plan"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
+    assert [step.agent for step in updates["execution_steps"]] == updates["execution_plan"]
+    assert updates["execution_steps"][0].reads
+    assert updates["execution_steps"][0].writes
     assert updates["triggered_agents"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
 
 
@@ -107,8 +111,22 @@ def test_planner_node_skips_content_when_no_job(monkeypatch, fixture_profile_tex
     state = CopilotState(session_id="sess_planner_profile", user_message=fixture_profile_text)
     updates = planner_node(state)
 
+    assert updates["active_plan_id"].startswith("plan_")
     assert updates["current_intent"] == "upload_profile"
     assert updates["execution_plan"] == ["profile_agent", "content_agent", "render_agent", "interview_agent"]
+    assert [step.agent for step in updates["execution_steps"]] == updates["execution_plan"]
+
+
+def test_planner_node_builds_single_step_plan_when_profile_missing(monkeypatch, fixture_jd_text):
+    llm = PromptRouterLLM(intent="upload_jd")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(session_id="sess_planner_single_step", user_message=fixture_jd_text)
+    updates = planner_node(state)
+
+    assert updates["execution_plan"] == ["jd_agent"]
+    assert len(updates["execution_steps"]) == 1
+    assert updates["execution_steps"][0].agent == "jd_agent"
 
 
 def test_jd_node_parses_job_from_fixture(monkeypatch, fixture_jd_text):

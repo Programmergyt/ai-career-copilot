@@ -19,7 +19,17 @@
   "interview_qa": "InterviewQA[]",
   "conversation_events": "ConversationEvent[]",
   "meta": "Meta",
-  "pending_actions": "PendingAction[]"
+  "pending_actions": "PendingAction[]",
+  "user_message": "string (runtime only)",
+  "user_attachments": "object[] (runtime only)",
+  "current_intent": "string (runtime only)",
+  "execution_plan": "string[] (runtime only)",
+  "execution_steps": "object[] (runtime only)",
+  "active_plan_id": "string (runtime only)",
+  "step_results": "object[] (runtime only)",
+  "contract_violations": "object[] (runtime only)",
+  "reply_message": "string (runtime only)",
+  "triggered_agents": "string[] (runtime only)"
 }
 ```
 
@@ -270,6 +280,62 @@
 
 ---
 
+## 运行时字段
+
+以下字段主要服务于 LangGraph 执行过程、Agent 解耦和测试观测，默认不作为长期持久化主数据：
+
+### `execution_plan`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| execution_plan | string[] | 当前 workflow 实际使用的顺序化 Agent 名称列表 |
+
+说明：
+
+- 当前阶段仍由 `execution_plan` 驱动 `graph.py` 条件路由。
+- 它是兼容旧架构的核心运行时字段。
+
+### `execution_steps`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| step_id | string | 运行时 step 标识 |
+| agent | string | 对应的 Agent 名称 |
+| status | string | planned / success / failed |
+| reads | string[] | 该 step 声明读取的字段 |
+| writes | string[] | 该 step 声明写入的字段 |
+
+说明：
+
+- 当前阶段它只是结构化镜像，不参与真实调度。
+- 下一阶段才会升级为真正的执行输入。
+
+### `active_plan_id`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| active_plan_id | string | 当前用户输入对应的计划 ID |
+
+### `step_results`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| step_id | string | step 标识 |
+| agent | string | Agent 名称 |
+| status | string | success / failed |
+| latency_ms | int | 执行耗时 |
+| writes | string[] | 实际写入字段 |
+
+### `contract_violations`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| agent | string | 发生越权的 Agent |
+| field | string | 违规字段 |
+| reason | string | 违规原因 |
+
+---
+
 ## `Meta`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -317,3 +383,5 @@
 4. `conversation_events` 可回放最近一次状态变化路径
 5. `content_dirty=true` 时，`resume_html` 和 `interview_qa` 视为过期
 6. `render_dirty=true` 时，只重新生成 `resume_html`，不重跑内容链路
+7. `execution_plan` 是当前阶段的唯一调度依据，`execution_steps` 只是镜像
+8. `contract_violations` 只能由 runtime 写入，业务 Agent 不直接维护

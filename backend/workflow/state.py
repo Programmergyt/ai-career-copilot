@@ -183,6 +183,29 @@ class PendingAction(BaseModel):
     created_at: str = ""
 
 
+class ExecutionStep(BaseModel):
+    step_id: str
+    agent: str
+    status: str = "planned"
+    reads: list[str] = Field(default_factory=list)
+    writes: list[str] = Field(default_factory=list)
+
+
+class StepResult(BaseModel):
+    step_id: str
+    agent: str
+    status: str
+    latency_ms: int = 0
+    writes: list[str] = Field(default_factory=list)
+    error: str = ""
+
+
+class ContractViolation(BaseModel):
+    agent: str
+    field: str
+    reason: str
+
+
 class Job(BaseModel):
     id: str = ""
     source: str = ""
@@ -223,5 +246,9 @@ class CopilotState(BaseModel):
     user_attachments: list[dict[str, Any]] = Field(default_factory=list)
     current_intent: str = ""
     execution_plan: list[str] = Field(default_factory=list)
+    execution_steps: list[ExecutionStep] = Field(default_factory=list)
+    active_plan_id: str = ""
+    step_results: list[StepResult] = Field(default_factory=list)
+    contract_violations: list[ContractViolation] = Field(default_factory=list)
     reply_message: str = ""
     triggered_agents: list[str] = Field(default_factory=list)

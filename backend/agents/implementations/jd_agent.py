@@ -58,7 +58,6 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
 
     logger.info("JD parsed: %s (v%d)", job.title, job.version)
 
-    # 设置 dirty flags
     meta = state.meta.model_copy(update={
         "dirty_flags": state.meta.dirty_flags.model_copy(update={
             "content_dirty": True,
@@ -77,3 +76,4 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
 def jd_node(state: CopilotState) -> dict[str, Any]:
     """JD Agent 同步兼容入口。"""
     return asyncio.run(jd_node_async(state))
+

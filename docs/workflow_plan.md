@@ -13,12 +13,20 @@ Planner Agent: Intent Classifier
   ↓
 Planner Agent: State Diff Planner → 生成 execution_plan
   ↓
-Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
+Planner Agent: Execution Metadata Builder → 镜像生成 execution_steps
+  ↓
+LangGraph 固定路由图 → 按 execution_plan 顺序调度 Agent
   ↓
 状态更新 + 记录 conversation_event
   ↓
 返回结果给前端
 ```
+
+说明：
+
+- 当前阶段保留 `workflow/graph.py` 中的固定节点图与条件路由。
+- `execution_plan` 仍是实际调度依据。
+- `execution_steps` 只是结构化元数据镜像，用于后续 executor 化和 step 级观测。
 
 ---
 
@@ -112,3 +120,23 @@ Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
 4. Planner Agent 记录完整执行链路到 event.triggered_agents
 5. 渲染指令不触发内容链路
 6. 内容指令执行后自动触发渲染链路
+
+---
+
+## 8. 当前阶段的解耦边界
+
+为了降低改造风险，当前阶段只做以下事情：
+
+1. Agent contract 显式化
+2. Agent registry 注册化
+3. Agent runtime 统一校验与执行包装
+4. state 增加最小运行时元字段
+
+当前阶段明确不做：
+
+1. 不把 `workflow/graph.py` 改造成统一 `plan_executor`
+2. 不把 `execution_plan` 替换成 DAG 调度输入
+3. 不引入并行执行
+4. 不要求新增 `step_run / plan_run` 落库
+
+这样可以保证“先解耦 Agent，再演进编排器”的顺序稳定落地。
