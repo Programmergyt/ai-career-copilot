@@ -36,6 +36,21 @@ async def get_mysql_pool() -> aiomysql.Pool:
     return _pool
 
 
+async def close_mysql_pool() -> None:
+    """关闭 MySQL 异步连接池。"""
+    global _pool
+    if _pool is None:
+        return
+
+    pool = _pool
+    _pool = None
+
+    logger.info("Closing MySQL async pool")
+    pool.close()
+    await pool.wait_closed()
+    logger.info("MySQL async pool closed")
+
+
 class MySQLStore:
     """MySQL 异步持久化操作封装。"""
 

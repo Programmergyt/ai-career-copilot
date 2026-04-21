@@ -1,7 +1,7 @@
 """AI Career Copilot 后端入口。"""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
-import sys
 
 import uvicorn
 from fastapi import FastAPI
@@ -12,18 +12,30 @@ from log import setup_logging, get_logger
 from api.chat import router as chat_router
 from api.resume import router as resume_router
 from api.export import router as export_router
-from storage.mysql_client import get_mysql_pool
-from storage.redis_client import get_redis_client
+from storage.mysql_client import get_mysql_pool, close_mysql_pool
+from storage.redis_client import get_redis_client, close_redis_client
 
 # 初始化日志
 setup_logging()
 logger = get_logger("app")
 BACKEND_DIR = Path(__file__).resolve().parent
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Manage shared async resources for startup and graceful shutdown."""
+    await _check_required_services()
+    try:
+        yield
+    finally:
+        await close_mysql_pool()
+        await close_redis_client()
+
+
 app = FastAPI(
     title="AI Career Copilot",
     description="多 Agent 求职辅助系统",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS
@@ -78,15 +90,7 @@ async def _check_required_services() -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     cfg = get_fastapi_config()
-    try:
-        asyncio.run(_check_required_services())
-    except Exception as exc:  
-        logger.critical("Startup aborted because dependency check failed: %s", exc, exc_info=True)
-        sys.exit(1)
-
     logger.info("Starting AI Career Copilot server on %s:%s", cfg["host"], cfg["port"])
     is_debug = cfg.get("debug", False)
     workers = cfg.get("workers", 2)
