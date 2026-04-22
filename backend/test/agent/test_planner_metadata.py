@@ -64,3 +64,21 @@ def test_dynamic_plan_builder_supports_content_and_render_bundle():
     assert plan.intent_bundle == ["content_edit", "render_edit"]
     assert [step.action for step in plan.steps] == ["update_resume_content", "update_render_config"]
     assert plan.steps[1].depends_on == [plan.steps[0].step_id]
+
+
+def test_build_plan_for_gap_analysis_routes_to_gap_agent():
+    state = CopilotState(session_id="sess_gap_analysis")
+
+    plan = build_plan("gap_analysis", state)
+
+    assert [step.agent for step in plan.steps] == ["gap_agent"]
+    assert [step.action for step in plan.steps] == ["analyze_gap"]
+
+
+def test_build_plan_for_ask_question_routes_to_question_answer_agent():
+    state = CopilotState(session_id="sess_qa", user_message="这个岗位更看重什么")
+
+    plan = build_plan("ask_question", state)
+
+    assert [step.agent for step in plan.steps] == ["question_answer_agent"]
+    assert [step.action for step in plan.steps] == ["answer_question"]

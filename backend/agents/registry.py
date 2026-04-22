@@ -54,6 +54,7 @@ def build_default_registry() -> AgentRegistry:
     from agents.implementations.content_agent import content_node_async
     from agents.implementations.render_agent import render_node_async
     from agents.implementations.interview_agent import interview_node_async
+    from agents.implementations.question_answer_agent import question_answer_node_async
 
     registry = AgentRegistry()
     registry.register("planner", planner_node_async)
@@ -63,6 +64,7 @@ def build_default_registry() -> AgentRegistry:
     registry.register("content_agent", content_node_async)
     registry.register("render_agent", render_node_async)
     registry.register("interview_agent", interview_node_async)
+    registry.register("question_answer_agent", question_answer_node_async)
     return registry
 
 

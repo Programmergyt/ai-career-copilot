@@ -12,6 +12,7 @@ SUPPORTED_TASKS = (
     "upload_profile",
     "content_edit",
     "render_edit",
+    "gap_analysis",
     "ask_question",
 )
 
@@ -61,7 +62,7 @@ def extract_task_bundle(primary_intent: str, state: CopilotState) -> list[str]:
     has_content_hint = any(token in message for token in _CONTENT_EDIT_HINTS)
     has_render_hint = any(token in message for token in _RENDER_EDIT_HINTS)
 
-    if primary_intent in {"upload_jd", "upload_profile", "ask_question"}:
+    if primary_intent in {"upload_jd", "upload_profile", "gap_analysis", "ask_question"}:
         return [primary_intent]
 
     if primary_intent == "content_edit":

@@ -14,7 +14,8 @@ TASK_PRIORITY = {
     "upload_profile": 20,
     "content_edit": 30,
     "render_edit": 40,
-    "ask_question": 50,
+    "gap_analysis": 50,
+    "ask_question": 60,
 }
 
 
@@ -253,10 +254,24 @@ def _add_render_edit_specs(specs: list[_StepSpec], tasks: list[str], state: Copi
 
 def _add_ask_question_specs(specs: list[_StepSpec]) -> None:
     specs.append(_StepSpec(
+        key="qa.answer",
+        agent="question_answer_agent",
+        action="answer_question",
+        intent="ask_question",
+        reads=["job", "candidate_profile", "resume_content_json", "gaps", "questions_to_ask", "interview_qa", "user_message"],
+        writes=["reply_message"],
+        retry_attempts=2,
+        params={"mode": "qa"},
+        reason="基于当前已加载状态回答用户问题。",
+    ))
+
+
+def _add_gap_analysis_specs(specs: list[_StepSpec]) -> None:
+    specs.append(_StepSpec(
         key="gap.ask",
         agent="gap_agent",
         action="analyze_gap",
-        intent="ask_question",
+        intent="gap_analysis",
         reads=["job", "candidate_profile", "resume_content_json"],
         writes=["gaps", "questions_to_ask"],
         preconditions=["job_exists", "candidate_profile_exists"],
@@ -281,6 +296,8 @@ def build_plan_from_tasks(tasks: list[str], state: CopilotState, *, primary_inte
             _add_content_edit_specs(specs, normalized_tasks, state)
         elif task == "render_edit":
             _add_render_edit_specs(specs, normalized_tasks, state)
+        elif task == "gap_analysis":
+            _add_gap_analysis_specs(specs)
         elif task == "ask_question":
             _add_ask_question_specs(specs)
 

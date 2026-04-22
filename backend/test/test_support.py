@@ -188,6 +188,11 @@ class PromptRouterLLM:
                 ]
             }, ensure_ascii=False))
 
+        if "求职问答专家" in text:
+            return _FakeResponse(json.dumps({
+                "answer": "基于当前已加载的岗位、简历和候选人信息，你最需要优先补强的是与 RAG 相关的项目深度与量化成果。"
+            }, ensure_ascii=False))
+
         if "面试准备专家" in text:
             return _FakeResponse(json.dumps({
                 "interview_qa": [
@@ -230,6 +235,7 @@ def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     import agents.implementations.content_agent as content_agent
     import agents.implementations.render_agent as render_agent
     import agents.implementations.interview_agent as interview_agent
+    import agents.implementations.question_answer_agent as question_answer_agent
 
     monkeypatch.setattr(planner, "get_llm", lambda: llm)
     monkeypatch.setattr(jd_agent, "get_llm", lambda: llm)
@@ -238,6 +244,7 @@ def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     monkeypatch.setattr(content_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(render_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(interview_agent, "get_llm", lambda: llm)
+    monkeypatch.setattr(question_answer_agent, "get_llm", lambda: llm)
 
 
 def ensure_langsmith_enabled() -> str | None:

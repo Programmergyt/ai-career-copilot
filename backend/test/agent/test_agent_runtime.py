@@ -67,6 +67,7 @@ def test_contracts_cover_all_builtin_agents():
         "jd_agent",
         "profile_agent",
         "gap_agent",
+        "question_answer_agent",
         "content_agent",
         "render_agent",
         "interview_agent",
@@ -86,6 +87,7 @@ def test_default_registry_registers_all_builtin_agents():
         "jd_agent",
         "planner",
         "profile_agent",
+        "question_answer_agent",
         "render_agent",
     ]
     assert registry.has("planner") is True

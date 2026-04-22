@@ -16,7 +16,15 @@ def _registry() -> AgentRegistry:
     async def _ok_executor(state):
         return {}
 
-    for agent_name in ("jd_agent", "content_agent", "render_agent", "profile_agent", "gap_agent", "interview_agent"):
+    for agent_name in (
+        "jd_agent",
+        "content_agent",
+        "render_agent",
+        "profile_agent",
+        "gap_agent",
+        "interview_agent",
+        "question_answer_agent",
+    ):
         registry.register(agent_name, _ok_executor)
     return registry
 

@@ -1,0 +1,253 @@
+%-------------------------
+% Resume in Latex
+% Author : Sourabh Bajaj
+% Modified for: Yiting Guo (Chinese + English Combined)
+% License : MIT
+%------------------------
+
+\documentclass[a4paper,12pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+
+% --- Font Settings (Compatible with Overleaf) ---
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\setCJKmainfont[
+    BoldFont=FandolHei-Regular,
+    ItalicFont=FandolKai-Regular
+]{FandolHei-Regular}
+\setmainfont{Times New Roman}
+% --- Font Settings End ---
+
+\setlist{nosep}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \scshape\raggedright\large
+}{}{0em}{}[\color{black}\titlerule]
+\titlespacing*{\section}{0em}{0.5em}{0.5em}
+
+% -----------------------------------------
+% Custom Commands Definition
+% -----------------------------------------
+
+% 通用三列：用于实习/工作经历
+\newcommand{\threeColumn}[3]{
+  \begin{tabularx}{\textwidth}{>{\setlength\hsize{0.75\hsize}}X>{\setlength\hsize{1.55\hsize}}X>{\setlength\hsize{0.7\hsize}}X}
+    \raggedright\arraybackslash{#1} & \centering{#2} & \raggedleft\arraybackslash{#3} \\
+  \end{tabularx}
+}
+
+% 教育背景专用
+\newcommand{\educationEntry}[3]{
+  \begin{tabularx}{\textwidth}{@{}l >{\centering\arraybackslash}X r@{}}
+    {#1} & {#2} & {#3} \\
+  \end{tabularx}
+}
+
+% 紧凑三列（英文版备用）
+\newcommand{\threeColumnTight}[3]{
+  \begin{tabularx}{\textwidth}{>{\setlength\hsize{0.95\hsize}}X>{\setlength\hsize{1.1\hsize}}X>{\setlength\hsize{0.95\hsize}}X}
+    \raggedright\arraybackslash{#1} & \centering{#2} & \raggedleft\arraybackslash{#3} \\
+  \end{tabularx}
+}
+
+\newcommand{\resumeProjectTitle}[2]{
+  \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+    \textbf{#1} & {#2}
+  \end{tabular*}
+}
+\newcommand{\resumeProjectSubTitle}[2]{
+  \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+    \emph{#1} & {#2}
+  \end{tabular*}
+}
+
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=*]}
+\newcommand{\resumeItemListEnd}{\end{itemize}}
+\newcommand{\resumeItem}[1]{\item{#1}}
+
+% 中文技能条目（全角冒号）
+\newcommand{\resumeItemDetailCN}[2]{\item\textbf{#1}：{#2}}
+% 英文技能条目（半角冒号）
+\newcommand{\resumeItemDetailEN}[2]{\item\textbf{#1}: {#2}}
+
+%-------------------------------------------
+%%%%%%  CV STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+% ============================================================
+%  中文简历
+% ============================================================
+
+%----------HEADING-----------------
+\setlength\extrarowheight{5pt}
+\begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+  \textbf{\LARGE 郭奕廷} & +86-135-8592-6126\\
+  \href{mailto:2403508140@qq.com}{2403508140@qq.com} & 中国·上海\\
+\end{tabular*}
+\vspace{3pt}
+
+\renewcommand{\arraystretch}{0}
+
+%-----------EDUCATION-----------------
+\section{教育背景}
+\educationEntry{控制工程硕士}{华东理工大学}{2025.09 -- 2028.06}
+\educationEntry{人工智能学士}{华东理工大学}{2021.09 -- 2025.06}
+\vspace{-1em}
+
+%-----------SKILLS-----------------
+\section{专业技能}
+\resumeItemListStart
+
+\resumeItemDetailCN{编程与工程基础}{
+熟练使用 Python / Java 进行后端开发，具备fastapi / Springboot使用经验，熟悉 Linux 环境与 Git 协作流程
+}
+\resumeItemDetailCN{AI 应用开发}{
+具备基于大模型的应用开发经验，能够设计并实现 RAG 系统（检索、重排、生成），理解提示词设计与上下文构建方法
+}
+\resumeItemDetailCN{Agent 系统设计}{
+理解多 Agent / 工作流编排思想，具备使用 LangChain / LangGraph 构建任务流程、状态管理与工具调用的经验
+}
+\resumeItemDetailCN{模型与部署}{
+具备本地大模型部署与推理经验（如 vLLM / llama.cpp），了解推理性能与资源权衡
+}
+\resumeItemDetailCN{语言能力}{
+CET-6 (578)，可阅读英文技术文档并进行基本技术交流
+}
+\resumeItemListEnd
+
+%-----------EXPERIENCE-----------------
+\section{实习经历}
+\threeColumn{软件开发实习生}{上海新华控制技术集团（正泰集团）}{2025.11 -- 2026.4}
+\vspace{-0.5em}
+\resumeItemListStart
+
+\resumeItem{针对电厂历史故障报告检索效率低、依赖人工经验的问题，设计并实现生产级 \textbf{RAG} 故障诊断Agent，构建 元数据过滤 + BM25 + 向量检索 的混合召回链路，并结合 父子分块、查询改写 与 Reranker 精排，通过 RRF 融合排序，经过3轮迭代将 Recall@5检索指标 从 0.38 提升至 0.90+。}
+
+\resumeItem{为解决生成结果不可评估的问题，使用 \textbf{Ragas} 构建自动化评估体系，系统化衡量 Faithfulness（0.90+）、Answer Relevancy（0.85+）、Context Precision（0.70+），并接入 \textbf{LangSmith} 实现全链路可观测与问题定位。}
+
+\resumeItem{围绕运维人员需要手动检索多系统数据的问题，集成测点实时/历史数据查询与报表生成工具，通过统一对话入口完成多轮 \textbf{故障诊断}，将故障分析时间从 30 分钟缩短至约 45 秒。}
+
+\resumeItem{针对大模型在工业场景中的可靠性问题，将规则引擎输出的异常指标结构化注入 Prompt 作为先验，并设计 \textbf{置信度门控}机制（TopK 相似度 \texttimes{} LLM 自评分），低于阈值自动转人工处理，有效降低幻觉风险。}
+
+\resumeItem{在电厂断网环境下完成系统落地，基于 \textbf{Docker} 部署 Qwen3-7B（llama.cpp 推理）、bge-m3（向量化）与 bge-reranker（精排），实现全栈模型本地化部署与 RAG 工作流编排。}
+
+\resumeItemListEnd
+
+%-----------PROJECTS-----------------
+\section{项目经历}
+
+\resumeProjectTitle{AI Career Copilot}{}
+\resumeProjectSubTitle{开发者}{Python, LangGraph, FastAPI}
+\resumeItemListStart
+\resumeItem{基于 \textbf{LangGraph} 设计求职 Agent 的 Planner-Executor 串行工作流，将 JD 解析、候选人画像抽取、Gap 分析、简历内容生成、HTML 渲染与模拟面试拆分为独立 Agent 节点，通过共享 \textbf{CopilotState} 在多步骤任务间传递 Job、Profile、Resume 等结构化状态。}
+\resumeItem{负责实现 Agent 控制层：先由 Planner 基于用户输入完成意图识别与执行计划生成，再结合 \textbf{Plan Validator}、Agent Registry 与 Contract 机制校验每一步前置条件、可写字段与重试策略，避免 Agent 越权写状态或在依赖缺失时盲目执行。}
+\resumeItem{构建生产级监控与回溯能力：在运行时记录 \textbf{step\_results}、contract\_violations、步骤耗时与状态，并接入 \textbf{LangSmith} 追踪模型调用链路；同时对简历内容与 HTML 输出进行版本化管理，提升问题定位、结果复现与系统迭代效率。}
+\resumeItemListEnd
+\vspace{0.5em}
+
+%-----------HONORS-----------------
+\section{获奖经历}
+\resumeItemListStart
+    \resumeItem{第22届华为杯中国研究生数学建模竞赛 二等奖 \hfill 2025}
+    \resumeItem{华东理工大学 校级奖学金 \hfill 2次}
+\resumeItemListEnd
+
+% ============================================================
+%  分页
+% ============================================================
+\newpage
+
+% ============================================================
+%  英文简历
+% ============================================================
+
+%----------HEADING-----------------
+\setlength\extrarowheight{5pt}
+\begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+  \textbf{\LARGE Yiting Guo} & +86-135-8592-6126\\
+  \href{mailto:2403508140@qq.com}{2403508140@qq.com} & Shanghai, China\\
+\end{tabular*}
+\vspace{3pt}
+
+\renewcommand{\arraystretch}{0}
+
+%-----------EDUCATION-----------------
+\section{EDUCATION}
+\educationEntry{M.S. in Control Engineering}{East China University of Science and Technology}{Sep. 2025 -- Jun. 2028}
+\educationEntry{B.S. in Artificial Intelligence}{East China University of Science and Technology}{Sep. 2021 -- Jun. 2025}
+\vspace{-1em}
+
+%-----------SKILLS-----------------
+\section{SKILLS}
+\resumeItemListStart
+\resumeItemDetailEN{Programming \& Engineering}{Proficient in backend development with Python and Java; experienced with FastAPI and Spring Boot, and familiar with Linux environments plus Git-based collaboration workflows.}
+\resumeItemDetailEN{AI Application Development}{Experienced in building LLM-based applications and designing end-to-end RAG systems including retrieval, reranking, and generation; familiar with prompt design and context construction.}
+\resumeItemDetailEN{Agent System Design}{Understand multi-agent and workflow orchestration patterns, with hands-on experience using LangChain and LangGraph for task flows, state management, and tool invocation.}
+\resumeItemDetailEN{Model Deployment}{Experienced in local LLM deployment and inference with frameworks such as vLLM and llama.cpp, with practical understanding of performance and resource trade-offs.}
+\resumeItemDetailEN{English}{CET-6 (Score: 578); able to read English technical documentation and handle basic technical communication.}
+\resumeItemListEnd
+
+%-----------EXPERIENCE-----------------
+\section{INTERNSHIP EXPERIENCE}
+\threeColumn{Software Developer Intern}{Shanghai Xinhua Control Technology (Chint Group)}{Nov. 2025 -- Apr. 2026}
+\vspace{-0.5em}
+\resumeItemListStart
+\resumeItem{Designed and implemented a production-grade \textbf{RAG} fault-diagnosis agent for power-plant incident reports; built a hybrid retrieval pipeline with metadata filtering, BM25, and vector search, combined with parent-child chunking, query rewriting, reranker-based re-ranking, and RRF fusion, improving Recall@5 from 0.38 to 0.90+ after three iterations.}
+\resumeItem{Built an automated evaluation framework with \textbf{Ragas} to systematically measure Faithfulness (0.90+), Answer Relevancy (0.85+), and Context Precision (0.70+), and integrated \textbf{LangSmith} for end-to-end observability and issue diagnosis.}
+\resumeItem{Integrated tools for real-time and historical sensor-data queries plus report generation, enabling multi-turn \textbf{fault diagnosis} through a unified conversational entry point and reducing fault-analysis time from 30 minutes to about 45 seconds.}
+\resumeItem{To improve reliability in industrial scenarios, injected structured anomaly indicators from a rule engine into prompts as priors and designed a \textbf{confidence-gating} mechanism based on TopK similarity $\times$ LLM self-scoring; low-confidence cases were automatically escalated to human operators, reducing hallucination risk.}
+\resumeItem{Delivered the system in an air-gapped power-plant environment by deploying Qwen3-7B (llama.cpp inference), bge-m3 (embedding), and bge-reranker (reranking) with \textbf{Docker}, achieving localized full-stack model deployment and RAG workflow orchestration.}
+\resumeItemListEnd
+
+%-----------PROJECTS-----------------
+\section{PROJECTS}
+
+\resumeProjectTitle{AI Career Copilot}{}
+\resumeProjectSubTitle{Developer}{Python, LangGraph, FastAPI}
+\resumeItemListStart
+\resumeItem{Designed a Planner-Executor workflow for a job-seeking copilot using \textbf{LangGraph}; decomposed JD parsing, candidate profile extraction, gap analysis, resume content generation, HTML rendering, and mock interview into independent agent nodes, with \textbf{CopilotState} used to pass structured Job, Profile, and Resume data across multi-step tasks.}
+\resumeItem{Implemented the Agent control layer: a Planner first performs intent classification and execution-plan generation, then \textbf{Plan Validator}, Agent Registry, and Contract checks enforce step preconditions, allowed state writes, and retry policies, preventing invalid execution when dependencies are missing or agents attempt out-of-scope updates.}
+\resumeItem{Built production-oriented observability and traceability by recording runtime \textbf{step\_results}, contract\_violations, step latency, and status metrics, while integrating \textbf{LangSmith} for model-call tracing and versioning resume content plus HTML outputs to improve debugging, reproducibility, and iteration efficiency.}
+\resumeItemListEnd
+\vspace{0.5em}
+
+%-----------HONORS-----------------
+\section{HONORS AND AWARDS}
+\resumeItemListStart
+    \resumeItem{2nd Prize, The 22nd China Post-Graduate Mathematical Contest in Modeling, Huawei Cup \hfill 2025}
+  \resumeItem{University Academic Scholarship, East China University of Science and Technology \hfill 2 Times}
+\resumeItemListEnd
+
+\end{document}

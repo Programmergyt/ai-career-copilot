@@ -10,6 +10,10 @@ class IntentClassificationOutput(BaseModel):
     reason: str = ""
 
 
+class AskQuestionOutput(BaseModel):
+    answer: str = ""
+
+
 class JDAnalysisOutput(BaseModel):
     industry: str = ""
     title: str = ""
