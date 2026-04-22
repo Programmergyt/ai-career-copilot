@@ -224,12 +224,12 @@ class PromptRouterLLM:
 def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     """将所有 Agent 模块中的 get_llm 打桩为同一假实例。"""
     import agents.planner as planner
-    import agents.jd_agent as jd_agent
-    import agents.profile_agent as profile_agent
-    import agents.gap_agent as gap_agent
-    import agents.content_agent as content_agent
-    import agents.render_agent as render_agent
-    import agents.interview_agent as interview_agent
+    import agents.implementations.jd_agent as jd_agent
+    import agents.implementations.profile_agent as profile_agent
+    import agents.implementations.gap_agent as gap_agent
+    import agents.implementations.content_agent as content_agent
+    import agents.implementations.render_agent as render_agent
+    import agents.implementations.interview_agent as interview_agent
 
     monkeypatch.setattr(planner, "get_llm", lambda: llm)
     monkeypatch.setattr(jd_agent, "get_llm", lambda: llm)

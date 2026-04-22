@@ -8,9 +8,15 @@
 import json
 
 import pytest
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
+pytest.importorskip("aiomysql")
+pytest.importorskip("redis")
+
 from main import app
+from api.chat import ChatResponse
+from workflow.plan_mode.plan_schema import ContractViolation, PlanStep, StepPrecondition, StepRetryPolicy, StepResult
 from workflow.state import CopilotState, Gap, InterviewQA, Job, Question
 
 
@@ -42,6 +48,46 @@ class TestChatEndpoint:
         })
         # 可能 200 或 500（依赖 LLM），但不应是 422
         assert response.status_code != 422
+
+    def test_chat_response_model_contains_plan_debug_fields(self):
+        payload = ChatResponse(
+            session_id="sess_api",
+            reply_message="ok",
+            plan_id="plan_1",
+            plan_status="success",
+            execution_steps=[
+                PlanStep(
+                    step_id="st_1",
+                    agent="render_agent",
+                    action="render_resume",
+                    intent="render_edit",
+                    preconditions=[StepPrecondition(kind="resume_content_exists")],
+                    retry=StepRetryPolicy(),
+                ).model_dump()
+            ],
+            step_results=[
+                StepResult(
+                    step_id="st_1",
+                    agent="render_agent",
+                    action="render_resume",
+                    status="success",
+                    attempt=1,
+                ).model_dump()
+            ],
+            contract_violations=[
+                ContractViolation(
+                    step_id="st_1",
+                    agent="render_agent",
+                    action="render_resume",
+                    field="resume_content_json",
+                    reason="write_not_allowed_by_contract",
+                ).model_dump()
+            ],
+        )
+
+        assert payload.plan_id == "plan_1"
+        assert payload.plan_status == "success"
+        assert payload.execution_steps[0]["action"] == "render_resume"
 
 
 class TestResumeEndpoints:

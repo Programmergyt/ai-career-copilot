@@ -80,8 +80,8 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
 
     state = CopilotState.model_validate(saved)
     state.user_message = req.render_instruction
-    state.current_intent = "render_edit"
-    state.execution_plan = ["render_agent"]
+    state.current_intent = ""
+    state.intent_bundle = ["render_edit"]
 
     graph = _get_graph()
     try:
@@ -92,8 +92,24 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
 
     final = CopilotState.model_validate(result)
 
-    persist_data = final.model_dump(exclude={"user_message", "user_attachments", "current_intent",
-                                              "execution_plan", "reply_message", "triggered_agents"})
+    persist_data = final.model_dump(exclude={
+        "user_message",
+        "user_attachments",
+        "current_intent",
+        "intent_bundle",
+        "execution_plan",
+        "execution_steps",
+        "active_plan_id",
+        "plan_policy",
+        "plan_status",
+        "active_step",
+        "step_results",
+        "contract_violations",
+        "last_plan_error",
+        "replan_candidate",
+        "reply_message",
+        "triggered_agents",
+    })
     await _asave_state(store, persist_data)
 
     background_tasks.add_task(_persist_to_mysql_safe, final)

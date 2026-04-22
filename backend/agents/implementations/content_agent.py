@@ -20,6 +20,20 @@ from log import get_logger
 logger = get_logger("agent")
 
 
+def _resolve_content_mode(state: CopilotState) -> tuple[str, str]:
+    active_step = state.active_step
+    if active_step is not None:
+        mode = str(active_step.params.get("mode") or "").strip().lower()
+        instruction = str(active_step.params.get("instruction") or state.user_message)
+        if active_step.action == "update_resume_content" or mode == "edit":
+            return "edit", instruction
+        return "generate", instruction
+
+    if state.current_intent == "content_edit":
+        return "edit", state.user_message
+    return "generate", state.user_message
+
+
 def _build_resume_from_parsed(parsed: ResumeGenerationOutput, state: CopilotState) -> ResumeContent:
     """从 LLM 返回的 JSON 构建 ResumeContent 对象。"""
     now = datetime.now(timezone.utc).isoformat()
@@ -86,22 +100,22 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
     """Resume Content Agent 异步节点函数。"""
     logger.info("Resume Content Agent started for session %s", state.session_id)
 
-    intent = state.current_intent
+    mode, instruction = _resolve_content_mode(state)
     llm = get_llm()
 
-    if intent == "content_edit" and state.resume_content_json:
+    if mode == "edit" and state.resume_content_json:
         prompt = RESUME_SECTION_UPDATE_PROMPT.format(
             current_resume_json=state.resume_content_json.model_dump_json(indent=2),
             job_json=state.job.model_dump_json(indent=2) if state.job else "{}",
-            edit_instruction=state.user_message,
+            edit_instruction=instruction,
         )
     else:
         job_json = state.job.model_dump_json(indent=2) if state.job else "{}"
         profile_json = state.candidate_profile.model_dump_json(indent=2) if state.candidate_profile else "{}"
 
         edit_instruction = ""
-        if intent == "content_edit":
-            edit_instruction = f"用户修改指令：{state.user_message}"
+        if mode == "edit":
+            edit_instruction = f"用户修改指令：{instruction}"
 
         prompt = RESUME_GENERATION_PROMPT.format(
             job_json=job_json,
@@ -142,4 +156,3 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
 def content_node(state: CopilotState) -> dict[str, Any]:
     """Resume Content Agent 同步兼容入口。"""
     return asyncio.run(content_node_async(state))
-

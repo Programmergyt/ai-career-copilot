@@ -1,4 +1,4 @@
-"""Planner Agent — 意图分类 + 执行计划生成 + 执行元数据镜像。"""
+"""Planner Agent — intent resolution + serial plan building + validation."""
 
 from __future__ import annotations
 
@@ -7,16 +7,20 @@ import uuid
 from typing import Any
 
 from agents.json_contracts import IntentClassificationOutput
-from agents.planner_metadata import build_plan_metadata
-from models.llm import get_llm, ainvoke_json_with_schema
-from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
-from workflow.state import CopilotState
+from agents.registry import get_default_registry
 from log import get_logger
+from models.llm import ainvoke_json_with_schema, get_llm
+from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
+from workflow.plan_mode.plan_builder import build_plan_from_tasks
+from workflow.plan_mode.task_extractor import extract_task_bundle
+from workflow.plan_mode.plan_validator import PlanValidationError, validate_plan
+from workflow.state import CopilotState
 
 logger = get_logger("agent")
 
+
 async def _classify_intent_async(state: CopilotState) -> IntentClassificationOutput:
-    """异步调用 LLM 进行意图分类。"""
+    """Classify the user message into a supported workflow intent."""
     prompt = INTENT_CLASSIFICATION_PROMPT.format(
         has_job=state.job is not None,
         has_profile=state.candidate_profile is not None,
@@ -27,17 +31,36 @@ async def _classify_intent_async(state: CopilotState) -> IntentClassificationOut
     result = await ainvoke_json_with_schema(llm, prompt, IntentClassificationOutput, logger, "Planner Agent")
     logger.info("Intent classified: %s (reason: %s)", result.intent, result.reason)
     return result
+
+
+async def _resolve_intent_async(state: CopilotState) -> IntentClassificationOutput:
+    """Honor an explicit current_intent override when internal APIs provide one."""
+    if state.intent_bundle:
+        logger.info("Planner task bundle override detected: %s", state.intent_bundle)
+        return IntentClassificationOutput(
+            intent=state.intent_bundle[0],
+            reason="task bundle override from existing state",
+        )
+    if state.current_intent:
+        logger.info("Planner intent override detected: %s", state.current_intent)
+        return IntentClassificationOutput(
+            intent=state.current_intent,
+            reason="intent override from existing state",
+        )
+    return await _classify_intent_async(state)
+
+
 async def planner_node_async(state: CopilotState) -> dict[str, Any]:
-    """Planner Agent 异步节点函数。"""
+    """Planner Agent async node."""
     logger.info("Planner Agent started for session %s", state.session_id)
 
-    # 1. 意图分类
     try:
-        intent_result = await _classify_intent_async(state)
+        intent_result = await _resolve_intent_async(state)
     except RuntimeError as exc:
         logger.error("Planner Agent failed: %s", exc)
         return {
             "active_plan_id": "",
+            "plan_status": "failed",
             "current_intent": "ask_question",
             "execution_plan": [],
             "execution_steps": [],
@@ -47,24 +70,41 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
 
     intent = intent_result.intent or "ask_question"
 
-    # 2. 构建执行计划与结构化 step 元数据
-    plan_id, plan, execution_steps = build_plan_metadata(intent, state)
-    logger.info("Execution plan: %s", plan)
-    logger.info("Execution steps: %s", [step.agent for step in execution_steps])
+    try:
+        task_bundle = extract_task_bundle(intent, state)
+        plan = build_plan_from_tasks(task_bundle, state, primary_intent=intent)
+        execution_plan = [step.agent for step in plan.steps]
+        validate_plan(plan, state, get_default_registry())
+    except PlanValidationError as exc:
+        logger.error("Planner generated invalid plan: %s", exc)
+        return {
+            "active_plan_id": "",
+            "plan_status": "failed",
+            "current_intent": intent,
+            "execution_plan": [],
+            "execution_steps": [],
+            "triggered_agents": [],
+            "reply_message": f"计划生成失败：{exc}",
+        }
 
-    # 3. 生成消息 ID 和事件
-    message_id = f"msg_{uuid.uuid4().hex[:12]}"
+    logger.info("Execution plan: %s", execution_plan)
+    logger.info("Execution steps: %s", [step.agent for step in plan.steps])
 
+    message_id = state.meta.last_user_message_id or f"msg_{uuid.uuid4().hex[:12]}"
     updates: dict[str, Any] = {
-        "active_plan_id": plan_id,
+        "active_plan_id": plan.plan_id,
+        "plan_status": "planned",
         "current_intent": intent,
-        "execution_plan": plan,
-        "execution_steps": execution_steps,
-        "triggered_agents": list(plan),
+        "intent_bundle": plan.intent_bundle,
+        "execution_plan": execution_plan,
+        "execution_steps": plan.steps,
+        "plan_policy": plan.policy,
+        "triggered_agents": list(execution_plan),
+        "last_plan_error": "",
+        "replan_candidate": False,
     }
 
-    # 无需执行 Agent 的意图直接回复
-    if not plan:
+    if not execution_plan:
         if intent == "export":
             updates["reply_message"] = "导出功能将在后续版本中支持。"
         elif intent == "ask_question":
@@ -78,5 +118,5 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
 
 
 def planner_node(state: CopilotState) -> dict[str, Any]:
-    """Planner Agent 同步兼容入口。"""
+    """Planner Agent sync entry."""
     return asyncio.run(planner_node_async(state))

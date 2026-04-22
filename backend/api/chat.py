@@ -53,6 +53,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     reply_message: str = ""
+    plan_id: str = ""
+    plan_status: str = "planned"
     job: dict | None = None
     gaps: list[dict] = Field(default_factory=list)
     questions_to_ask: list[dict] = Field(default_factory=list)
@@ -61,6 +63,9 @@ class ChatResponse(BaseModel):
     resume_html: dict | None = None
     interview_qa: list[dict] = Field(default_factory=list)
     triggered_agents: list[str] = Field(default_factory=list)
+    execution_steps: list[dict] = Field(default_factory=list)
+    step_results: list[dict] = Field(default_factory=list)
+    contract_violations: list[dict] = Field(default_factory=list)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -100,11 +105,17 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
         "user_message",
         "user_attachments",
         "current_intent",
+        "intent_bundle",
         "execution_plan",
         "execution_steps",
         "active_plan_id",
+        "plan_policy",
+        "plan_status",
+        "active_step",
         "step_results",
         "contract_violations",
+        "last_plan_error",
+        "replan_candidate",
         "reply_message",
         "triggered_agents",
     })
@@ -116,6 +127,8 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
     return ChatResponse(
         session_id=session_id,
         reply_message=final_state.reply_message,
+        plan_id=final_state.active_plan_id,
+        plan_status=final_state.plan_status,
         job=final_state.job.model_dump() if final_state.job else None,
         gaps=[g.model_dump() for g in final_state.gaps],
         questions_to_ask=[q.model_dump() for q in final_state.questions_to_ask],
@@ -124,6 +137,9 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
         resume_html=final_state.resume_html.model_dump(),
         interview_qa=[qa.model_dump() for qa in final_state.interview_qa],
         triggered_agents=final_state.triggered_agents,
+        execution_steps=[step.model_dump() for step in final_state.execution_steps],
+        step_results=[result.model_dump() for result in final_state.step_results],
+        contract_violations=[violation.model_dump() for violation in final_state.contract_violations],
     )
 
 

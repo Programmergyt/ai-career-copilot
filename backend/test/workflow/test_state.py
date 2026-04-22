@@ -7,8 +7,9 @@ from workflow.state import (
     ResumeContent, ResumeProfile, ResumeContentMeta, SectionItem, Education,
     RenderConfig, PageMargin, ResumeHtml, Gap, Question, InterviewQA,
     ConversationEvent, Meta, DirtyFlags, PendingAction,
-    ExecutionStep, StepResult, ContractViolation,
+    StepResult, ContractViolation,
 )
+from workflow.plan_mode.plan_schema import PlanStep, StepPrecondition, StepRetryPolicy
 
 
 def _dump(model):
@@ -39,6 +40,7 @@ class TestCopilotStateDefaults:
         assert state.execution_plan == []
         assert state.execution_steps == []
         assert state.active_plan_id == ""
+        assert state.plan_status == "planned"
         assert state.step_results == []
         assert state.contract_violations == []
 
@@ -225,25 +227,33 @@ class TestStateRoundTrip:
             current_intent="upload_jd",
             execution_plan=["jd_agent"],
             execution_steps=[
-                ExecutionStep(
+                PlanStep(
                     step_id="step_1",
                     agent="jd_agent",
+                    action="parse_job",
+                    intent="upload_jd",
                     reads=["user_message"],
                     writes=["job"],
+                    preconditions=[StepPrecondition(kind="candidate_profile_exists", message="demo")],
+                    retry=StepRetryPolicy(max_attempts=2, backoff="fixed_1s"),
                 )
             ],
             step_results=[
                 StepResult(
                     step_id="step_1",
                     agent="jd_agent",
+                    action="parse_job",
                     status="success",
+                    attempt=1,
                     latency_ms=12,
                     writes=["job"],
                 )
             ],
             contract_violations=[
                 ContractViolation(
+                    step_id="step_1",
                     agent="jd_agent",
+                    action="parse_job",
                     field="resume_html",
                     reason="write_not_allowed_by_contract",
                 )
@@ -255,5 +265,7 @@ class TestStateRoundTrip:
         assert restored.job.title == "测试岗位"
         assert restored.candidate_profile.profile_basic.name == "测试用户"
         assert restored.execution_steps[0].agent == "jd_agent"
+        assert restored.execution_steps[0].action == "parse_job"
         assert restored.step_results[0].status == "success"
+        assert restored.step_results[0].attempt == 1
         assert restored.contract_violations[0].field == "resume_html"

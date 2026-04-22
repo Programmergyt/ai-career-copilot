@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 from pydantic import BaseModel, Field
+from workflow.plan_mode.plan_schema import ContractViolation, PlanPolicy, PlanStep, PlanStatus, StepResult
 
 
 # ---- 子结构 ----
@@ -183,29 +184,6 @@ class PendingAction(BaseModel):
     created_at: str = ""
 
 
-class ExecutionStep(BaseModel):
-    step_id: str
-    agent: str
-    status: str = "planned"
-    reads: list[str] = Field(default_factory=list)
-    writes: list[str] = Field(default_factory=list)
-
-
-class StepResult(BaseModel):
-    step_id: str
-    agent: str
-    status: str
-    latency_ms: int = 0
-    writes: list[str] = Field(default_factory=list)
-    error: str = ""
-
-
-class ContractViolation(BaseModel):
-    agent: str
-    field: str
-    reason: str
-
-
 class Job(BaseModel):
     id: str = ""
     source: str = ""
@@ -245,10 +223,16 @@ class CopilotState(BaseModel):
     user_message: str = ""
     user_attachments: list[dict[str, Any]] = Field(default_factory=list)
     current_intent: str = ""
+    intent_bundle: list[str] = Field(default_factory=list)
     execution_plan: list[str] = Field(default_factory=list)
-    execution_steps: list[ExecutionStep] = Field(default_factory=list)
+    execution_steps: list[PlanStep] = Field(default_factory=list)
     active_plan_id: str = ""
+    plan_policy: PlanPolicy = Field(default_factory=PlanPolicy)
+    plan_status: PlanStatus = "planned"
+    active_step: Optional[PlanStep] = None
     step_results: list[StepResult] = Field(default_factory=list)
     contract_violations: list[ContractViolation] = Field(default_factory=list)
+    last_plan_error: str = ""
+    replan_candidate: bool = False
     reply_message: str = ""
     triggered_agents: list[str] = Field(default_factory=list)

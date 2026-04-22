@@ -388,361 +388,400 @@ backend/
 
 ---
 
-## 15. 具体到文件的改造清单（建议先做 P0）
+## 15. 当前已完成基线（截至当前代码）
 
-### P0-1：引入 Plan Schema（不改业务行为）
+本节仅保留已经在代码中落地、可作为下一阶段起点的部分；此前“待做但现已完成”的条目不再重复列为改造任务。
 
-- 新增 `backend/workflow/plan_mode/plan_schema.py`
-  - `Plan`, `PlanStep`, `StepPolicy`, `PlanPolicy`。
-- 修改 `backend/workflow/state.py`
-  - 将 `execution_plan: list[str]` 保留兼容。
-  - 新增 `execution_steps: list[PlanStep] = []`。
-  - 新增 `active_plan_id: str = ""`。
+### 15.1 已完成的结构性升级
 
-### P0-2：引入 Plan Validator（先只做静态检查）
+1. 编排骨架已从固定多路由图收敛为 `planner -> executor -> respond`。
+2. 已引入统一的 `Plan / PlanStep / PlanPolicy / StepResult / ContractViolation` schema。
+3. 已引入 `Agent Contract + Registry + Runtime` 三层运行时边界。
+4. `Planner` 已输出 `active_plan_id + execution_steps + execution_plan`，不再只吐旧式字符串链路。
+5. `Executor` 已按 step 串行执行，并统一处理前置条件检查、重试、step 状态更新与失败终止。
+6. `State` 已补齐 plan mode 运行时字段，如 `execution_steps / plan_status / step_results / contract_violations`。
+7. `/api/chat` 已向外返回 `plan_id / plan_status / execution_steps / step_results / contract_violations`，说明 plan mode 元数据已经对 API 消费方可见。
+8. 已有针对 `runtime / validator / executor / graph` 的基础测试，说明当前 plan mode 骨架并非仅停留在代码结构层面。
 
-- 新增 `backend/workflow/plan_mode/plan_validator.py`
-  - 校验 step 依赖闭环。
-  - 校验 writes 是否在 agent contract 允许范围内。
-  - 校验并行 step 写冲突。
+### 15.2 已完成部分的价值总结
 
-### P0-3：建立 Agent Registry（兼容旧节点函数）
+- Agent 已具备“单独注册、统一接入、运行时校验”的基础能力，新增实现不必再回到 graph 层硬编码。
+- Plan Mode 已从“纯元数据镜像”升级为“真实执行入口”，后续可以把优化重点从“有没有 executor”转到“planner 是否足够灵活、executor 是否足够鲁棒”。
+- 当前系统已经具备继续演进为“灵活计划 + 错误兜底 + replan”的合理基线，不需要再做一轮同类基础设施重建。
 
-- 新增 `backend/agents/registry.py`
-  - name -> callable 映射。
-  - 启动时注册现有 6 个 agent。
-- 新增 `backend/agents/contracts.py`
-  - 用数据结构声明每个 agent 的 `allowed_reads/allowed_writes/actions/idempotent`。
+### 15.3 当前仍然存在的核心缺口
 
-### P0-4：抽出 Plan Executor（串行版）
+尽管编排骨架已经切到 Plan Mode，但当前 `planner` 的计划生成仍主要是“单 intent -> 预设 step 序列”，还不是目标中的鲁棒动态架构：
 
-- 新增 `backend/workflow/plan_mode/plan_executor.py`
-  - 输入 `execution_steps`。
-  - 按顺序调用 registry 中 agent。
-  - 统一处理 retry、错误聚合、step 日志。
-- 修改 `backend/workflow/graph.py`
-  - 先保留原节点图，同时新增 `executor_agent` 试运行开关（feature flag）。
-
-### P0-5：观测与持久化骨架
-
-- 修改 `backend/storage/mysql_client.py`
-  - 新增 `save_plan_run(plan_run)`、`save_step_run(step_run)`。
-- 修改 `backend/sql/init_schema.sql`
-  - 新增 `plan_runs`, `step_runs` 两张表。
-- 修改 `backend/api/chat.py`
-  - `BackgroundTasks` 中补充 plan/step 执行记录写库。
+1. 仍以单意图分类为主，尚未升级为 `tasks[]` / `intent_bundle`。
+2. `build_plan()` 仍由硬编码分支决定 step 序列，灵活性主要体现在执行而非规划。
+3. `executor` 仍是串行 fail-fast，尚未支持部分成功、补偿、降级与 replan。
+4. `plan` 的观测还主要停留在运行时内存态，尚未沉淀到数据库级 `plan_run / step_run`。
+5. 多个业务 Agent 仍直接读取 `state.current_intent` 与 `state.user_message` 决定行为，尚未真正收敛为“只基于 step action / step context 执行”。
+6. `resume` 相关 API 仍通过覆盖 `current_intent` 触发渲染链路，说明外部入口与旧意图模型仍然耦合。
 
 ---
 
-## 16. SQL 与 API 字段建议（配合文件变更）
+## 16. 目标架构重述：鲁棒 Plan Mode
 
-### 16.1 新增表建议
+下一阶段的目标不再是“把旧流程显式化”，而是建立如下能力闭环：
+
+**Agent 单独注册 -> Planner 每轮生成与上下文匹配的灵活 Plan -> Executor 按 Plan 执行 -> 失败时有兜底策略 -> 必要时触发 replan -> 最终沉淀完整观测。**
+
+### 16.1 目标特征
+
+1. **Agent 单独注册**
+   - Agent 只声明能力、输入输出边界、默认重试策略。
+   - 新增 Agent 时，不需要修改核心 graph，只需注册与声明 contract。
+
+2. **Plan 按轮动态生成**
+   - Planner 基于用户任务集合、当前 state、历史执行结果与 policy 动态生成 Plan。
+   - Plan 不再只是固定意图模板，而是可组合、可裁剪、可重排的 step 集合。
+
+3. **Executor 负责执行策略**
+   - Executor 负责串行或有限并行执行、失败重试、降级、跳过、部分成功收敛。
+   - Agent 只专注于 step 内业务，不感知整体流程。
+
+4. **错误兜底与 replan**
+   - 失败不是直接终止，而是进入分类处理：可重试、可跳过、可降级、需重规划、需用户确认。
+   - replan 由 planner 基于“失败原因 + 已完成步骤 + 当前最新 state”生成剩余计划。
+
+5. **全链路可观测**
+   - 每次 plan 生成、step 执行、失败分类、replan 决策都可被记录、查询和分析。
+
+### 16.2 与当前实现的差距
+
+当前代码已经实现了“统一执行入口”，但还未实现以下关键能力：
+
+- 从单 intent 升级为多任务 bundle。
+- 从预设 step 模板升级为真正的 plan builder。
+- 从 fail-fast 升级为 error policy + fallback + replan。
+- 从内存态 step 观测升级为持久化的 plan observability。
+- 从“Agent 读全局 `current_intent`”升级为“Agent 读显式 step context / action”。
+
+---
+
+## 17. 面向鲁棒架构的后续改造任务
+
+### 17.0 先做的对齐事项：消除剩余旧模型耦合
+
+目标：在继续增强 Planner/Executor 之前，先把当前仍残留的“旧意图驱动接口”边界清掉，避免后面动态计划做了一半又被旧字段拖回去。
+
+建议改造：
+
+1. 让 Agent 执行优先读取 `PlanStep.action`、`PlanStep.intent` 或标准化 `step_context`，逐步减少对 `state.current_intent` 的依赖。
+2. 对 `content_agent`、`render_agent` 这类当前存在显式 intent 分支的实现，抽出 step-level 行为枚举，而不是继续依赖全局状态。
+3. 将 `resume.py` 中通过覆写 `current_intent = "render_edit"` 触发执行的模式，逐步迁移为显式 task / plan 入口。
+4. 明确 `user_message` 是原始用户输入，`step_context` 是某一步的执行参数，避免后续复合任务时多个 step 共享同一字符串导致歧义。
+
+### 17.1 Planner：从 Intent Router 升级为 Dynamic Plan Builder
+
+目标：让 Planner 真正基于任务和状态生成灵活计划，而不是只选择预定义模板。
+
+建议改造：
+
+1. 将单一 `intent` 输出升级为 `intent_bundle` / `tasks[]`。
+2. 将 `build_plan()` 从 `if/elif intent` 分支，升级为：
+   - task extraction
+   - task normalization
+   - step selection
+   - dependency assembly
+   - policy injection
+3. 支持“同轮复合指令”，例如：
+   - 内容改写 + 排版调整
+   - 上传资料 + 刷新简历 + 生成面试题
+   - 渲染调整 + 导出
+4. 让 planner 读取上一次执行失败摘要，在 replan 时只生成剩余步骤而非整链重来。
+
+建议新增文件职责：
+
+- `backend/workflow/plan_mode/task_extractor.py`
+- `backend/workflow/plan_mode/plan_builder.py`
+- `backend/workflow/plan_mode/replan_builder.py`
+
+### 17.2 Plan Schema：从“可执行”升级为“可恢复”
+
+目标：让 Plan 不仅能跑，还能支撑错误分类、补偿和 replan。
+
+建议扩展 `Plan / PlanStep / PlanPolicy`：
+
+1. `Plan`
+   - `intent_bundle`
+   - `plan_reason`
+   - `replan_count`
+   - `parent_plan_id`
+2. `PlanStep`
+   - `on_error`
+   - `fallback_action`
+   - `skippable`
+   - `timeout_ms`
+   - `idempotency_key`
+3. `PlanPolicy`
+   - `fail_fast`
+   - `partial_success`
+   - `replan_on_failure`
+   - `max_replans`
+   - `allow_degraded_completion`
+
+这样后续 executor 才能区分：
+
+- 失败后重试
+- 失败后跳过
+- 失败后改走降级路径
+- 失败后触发 replan
+
+### 17.3 Executor：从串行执行器升级为鲁棒执行器
+
+目标：让 executor 成为“运行时控制器”，而不只是一个 for-loop。
+
+建议能力：
+
+1. 执行前：
+   - 校验 step 依赖、前置条件、contract、policy。
+2. 执行中：
+   - 支持 step 重试。
+   - 支持按依赖拓扑执行。
+   - 在无冲突步骤间支持有限并行。
+3. 执行失败后：
+   - 根据错误类型判断 retry / fallback / replan / ask_user。
+   - 对失败 step 记录标准化错误码。
+   - 在允许部分成功时继续推进剩余步骤。
+4. 执行结束后：
+   - 汇总 plan 级状态：`success / partial / failed / replanned / degraded_success`。
+
+建议新增或重构：
+
+- `backend/workflow/plan_mode/plan_executor.py`
+- `backend/workflow/plan_mode/error_policy.py`
+- `backend/workflow/plan_mode/replan_decider.py`
+
+### 17.4 Runtime 与 Contract：从“越权拦截”升级为“运行时护栏”
+
+目标：让 runtime 除了拦截非法写入，还能提供鲁棒执行所需的统一护栏。
+
+建议增强：
+
+1. 在 contract 中补充：
+   - `supported_actions`
+   - `required_reads`
+   - `default_timeout_ms`
+   - `retryable_errors`
+   - `fallback_capabilities`
+2. 在 runtime 中补充：
+   - 输入缺失错误标准化
+   - LLM 格式错误标准化
+   - 超时错误标准化
+   - 第三方工具失败标准化
+3. 对 patch 写入增加：
+   - patch 类型约束
+   - version bump 约束
+   - 幂等写保护
+4. 引入 `step_context` 注入：
+   - 由 executor 把当前 step 的 action、参数、fallback 信息传入 agent
+   - agent 逐步摆脱对全局 `current_intent` 的直接依赖
+
+这样 Planner/Executor 才能基于统一错误语义做 replan，而不是依赖字符串匹配。
+
+### 17.5 Observation：从运行时字段升级为持久化审计
+
+目标：让 plan mode 的调试、优化、回归验证有真实数据支撑。
+
+建议新增持久化实体：
 
 1. `plan_runs`
-   - `plan_id`, `session_id`, `message_id`, `intent_bundle`, `status`, `policy_json`, `started_at`, `ended_at`。
+   - `plan_id`, `parent_plan_id`, `session_id`, `message_id`, `intent_bundle_json`, `status`, `replan_count`
+   - `policy_json`, `error_summary`, `started_at`, `ended_at`
 2. `step_runs`
-   - `step_run_id`, `plan_id`, `step_id`, `agent_name`, `status`, `attempt`, `latency_ms`, `error_code`, `state_patch_summary`, `created_at`。
+   - `step_run_id`, `plan_id`, `step_id`, `agent_name`, `action`, `status`, `attempt`
+   - `latency_ms`, `error_code`, `fallback_used`, `patch_summary`, `created_at`
+3. `replan_events`
+   - `event_id`, `old_plan_id`, `new_plan_id`, `trigger_step_id`, `reason`, `created_at`
 
-### 16.2 API 向后兼容扩展
+建议 API 扩展：
 
-`POST /api/chat` 的响应建议新增可选字段（默认不影响前端旧逻辑）：
+- `plan_id`
+- `plan_status`
+- `step_summaries`
+- `replanned`
+- `degraded`
 
-- `plan_id: str | null`
-- `step_summaries: list[{step_id, agent, status, latency_ms}]`
+说明：
 
-若前端未消费，可忽略；用于后续“执行轨迹可视化”。
-
----
-
-## 17. 最小可执行改造顺序
-
-### 可行性判断
-
-如果本轮目标明确限定为“**先完成 Agent 模块解耦，必要时小幅调整 state，但暂不改当前 workflow 图结构**”，则可行性较高，原因如下：
-
-1. `backend/agents/*.py` 已基本满足“节点函数输入 state、输出 patch”的统一形态，天然适合包一层 runtime/contract。
-2. 当前 `workflow/graph.py` 虽然路由固定，但它依赖的其实只是节点名与 `execution_plan`，并不阻止先把 Agent 实现从“直接 import 调用”升级为“注册 + 能力声明 + 统一执行包装”。
-3. `workflow/state.py` 当前运行时字段较少，但只需增加少量元数据字段，就能支撑 contract 校验、step 观测和后续平滑切换，而不必现在就引入完整 DAG executor。
-
-需要注意的边界：
-
-- 这一阶段不要同时推进 `graph.py` 大改，否则会把“Agent 解耦”和“编排重构”两个变量绑在一起，回归风险明显上升。
-- `state` 可以改，但应以“补充运行时元信息”为主，不要先把 `execution_plan` 全量替换成复杂 Step DAG。
-
-### 建议按模块拆分的最小顺序
-
-### Module 1：先固化 Agent Contract
-
-1. 新增 `backend/agents/contracts.py`。
-2. 为现有 `jd/profile/gap/content/render/interview` 六个 Agent 声明：
-   - `agent_name`
-   - `supported_intents` 或 `supported_actions`
-   - `allowed_reads`
-   - `allowed_writes`
-   - `default_retryable`
-   - `idempotent`（先可选）
-3. 第一阶段只做“声明落地”，不改业务逻辑。
-
-这一模块完成后的收益是：先把“文档里的职责边界”变成代码里的显式契约，为后面的 runtime 校验打底。
-
-### Module 2：引入 Registry，但不改 Graph 形态
-
-1. 新增 `backend/agents/registry.py`。
-2. 将当前各节点函数注册为：
-   - `jd_agent -> jd_node_async`
-   - `profile_agent -> profile_node_async`
-   - `gap_agent -> gap_node_async`
-   - `content_agent -> content_node_async`
-   - `render_agent -> render_node_async`
-   - `interview_agent -> interview_node_async`
-3. `graph.py` 先保持现有节点拓扑不变，只把内部调用入口改成“从 registry 取 agent 运行”或为后续切换预留兼容层。
-
-这一层的目标不是动态编排，而是先去掉“编排层直接绑定具体实现文件”的硬耦合。
-
-### Module 3：补一层 Agent Runtime Adapter
-
-1. 新增 `backend/agents/runtime.py`。
-2. 对每个 Agent 执行统一做三件事：
-   - 运行前按 contract 校验最小必需输入是否存在
-   - 执行后检查返回 patch 的写入字段是否越权
-   - 统一包装日志、异常、耗时和失败返回
-3. 当前 `graph.py` 仍按原节点顺序走，但节点内部不再“裸调 agent 函数”，而是走 runtime。
-
-这一层是本轮最关键的解耦点。做完之后，后续无论是保留固定图，还是改成 executor，Agent 接入方式都已经统一了。
-
-### Module 4：对 State 做最小增量改造
-
-建议只加运行时字段，不动现有持久化主结构：
-
-1. 在 `backend/workflow/state.py` 增加：
-   - `execution_steps: list[dict[str, Any]] = []`
-   - `active_plan_id: str = ""`
-   - `step_results: list[dict[str, Any]] = []`
-   - `contract_violations: list[dict[str, Any]] = []`
-2. 保留现有 `execution_plan: list[str]` 作为 graph 路由唯一依据。
-3. `execution_steps` 在这一阶段只做“镜像元数据”，例如：
-   - `step_id`
-   - `agent`
-   - `status`
-   - `reads`
-   - `writes`
-
-这样可以做到：workflow 不变，但 plan/step 级数据已经开始沉淀，为下一阶段 executor 化做兼容准备。
-
-### Module 5：轻量拆分 Planner，但先不引入新 Executor
-
-1. 保留 `backend/agents/planner.py` 对外节点入口不变。
-2. 先把内部逻辑拆成两个私有层次：
-   - intent classify
-   - plan metadata build
-3. 当前仍输出 `execution_plan` 给 graph 路由。
-4. 同时补充生成 `execution_steps`，但仅作为镜像，不参与实际调度。
-
-这一步的重点不是“计划驱动执行”，而是先把 Planner 从“只吐字符串数组”升级为“同时吐一份结构化计划草案”。
-
-### Module 6：补齐观测与回归测试
-
-1. 优先新增测试，而不是先改数据库：
-   - contract 校验测试
-   - registry 注册测试
-   - runtime patch 越权拦截测试
-   - planner 输出 `execution_plan + execution_steps` 的兼容测试
-2. 观测先落日志和内存态：
-   - step 开始/结束
-   - latency
-   - contract violation
-3. `plan_runs/step_runs` 落库可以放到下一小阶段，不必和 Agent 解耦绑定上线。
-
-这样能把本轮范围收紧在“运行时边界清晰化”，而不是过早进入存储和编排联动改造。
-
-### 本轮完成后的验收标准
-
-1. `workflow/graph.py` 拓扑与现有行为保持一致，`upload_jd / upload_profile / content_edit / render_edit / ask_question` 回归无差异。
-2. 所有业务 Agent 都能通过统一 `contract + registry + runtime` 接入。
-3. Agent 返回 patch 时，运行时可以识别越权写入并记录告警或阻断。
-4. Planner 除了输出旧 `execution_plan` 外，还能稳定输出结构化 `execution_steps` 元数据。
-5. 新增或替换某个 Agent 实现时，不需要再去改 graph 路由逻辑，只需改注册与 contract。
-
-### 下一阶段再做的事
-
-等上述 6 个模块稳定后，再进入下一轮：
-
-1. 将 `execution_steps` 从“镜像元数据”升级为真正执行输入。
-2. 引入串行 `plan_executor.py`。
-3. 再把 `graph.py` 从“多 route 函数”收敛为 `planner -> executor -> respond`。
-
-这样改造路径会更稳：先解耦 Agent，再替换编排器，而不是两者同时动。
+- 当前 `/api/chat` 实际上已经返回了比最初规划更多的 plan mode 字段，因此后续重点不是“是否要暴露 plan”，而是“如何稳定这些字段的语义，并让数据库持久化与 API 结构一致”。
 
 ---
 
-## 18. Module 5-6 完成情况（截至当前代码基线）
+## 18. 建议的分阶段实施路线
 
-本节记录当前代码已经完成的范围，作为后续真正进入 Plan Mode 改造的起点。
+### Phase 1：动态规划化
 
-### 18.1 Module 5 已完成内容
+目标：让 Planner 从“意图映射器”升级为“任务驱动的计划生成器”。
 
-当前 `backend/agents/planner.py` 已完成从“只输出 `execution_plan`”到“输出 `execution_plan + execution_steps + active_plan_id`”的升级，但仍保持旧 workflow 的兼容行为不变：
+实施项：
 
-1. 继续使用旧的 intent 分类逻辑。
-2. 继续输出 `execution_plan: list[str]`，供 `workflow/graph.py` 现有路由使用。
-3. 新增输出：
-   - `active_plan_id`
-   - `execution_steps`
-4. `execution_steps` 当前仅作为镜像元数据，包含：
-   - `step_id`
-   - `agent`
-   - `status`
-   - `reads`
-   - `writes`
+1. 引入 `tasks[]` / `intent_bundle`。
+2. 抽离 `task_extractor.py` 与 `plan_builder.py`。
+3. 引入 `step_context`，先把 agent 从 `current_intent` 依赖迁到 step 驱动。
+4. 让 planner 输出标准化 Plan，而不是固定模板的轻包装。
+5. 为复合任务补测试样例。
 
-这意味着当前系统已经具备了“计划元数据显式化”的第一步，但尚未进入“计划驱动执行”。
+验收标准：
 
-### 18.2 Module 6 已完成内容
+- 单轮可生成多个业务 step 分支。
+- 新增一个工具型 Agent 时，不需要新增新的 intent 路由分支。
 
-当前代码已具备一套不依赖数据库的最小观测与回归测试骨架：
+### Phase 2：错误兜底化
 
-1. `backend/agents/runtime.py` 已统一记录：
-   - step 执行成功
-   - step 执行失败
-   - contract violation
-2. `backend/workflow/state.py` 已增加：
-   - `step_results`
-   - `contract_violations`
-3. 已新增或补充测试覆盖：
-   - contract 声明与 registry 注册
-   - runtime 越权写入拦截
-   - runtime 异常封装
-   - state 新运行时字段序列化
-   - planner 输出 `execution_plan + execution_steps` 的兼容测试
+目标：让执行失败不再简单等于整次失败。
 
-### 18.3 当前阶段明确未做的事
+实施项：
 
-为控制范围，以下事项仍然刻意留在下一阶段：
+1. 建立标准错误分类与 `error_policy.py`。
+2. 为 step 定义 retry / skip / degrade / replan 策略。
+3. executor 支持 `partial_success` 与 `degraded_success`。
+4. 对导出、评分类、检索类工具引入可降级路径。
 
-1. 不新增 `plan_runs / step_runs` 数据库表。
-2. 不修改 `backend/sql/init_schema.sql`。
-3. 不把 `execution_steps` 作为真实执行输入。
-4. 不引入 `plan_executor.py`。
-5. 不重写 `workflow/graph.py` 的固定路由结构。
+验收标准：
 
-这个边界是合理的，因为当前新增的 `execution_steps / step_results / contract_violations / active_plan_id` 都属于运行时元数据，并未进入现有持久化主链路。
+- 同类失败可被稳定归类，而非只返回自由文本错误。
+- 非核心 step 失败时，系统仍可完成核心主链路。
 
----
+### Phase 3：Replan 化
 
-## 19. 基于当前基线，真正切换到 Plan Mode 的推荐流程
+目标：让系统具备“失败后重新规划剩余步骤”的能力。
 
-在当前基础上，后续应采用“**先让 execution_steps 可验证，再让 execution_steps 可执行，最后再收敛 workflow 图**”的顺序，而不是一步到位重写。
+实施项：
 
-### Phase A：把 `execution_steps` 从镜像元数据升级为可校验对象
+1. 引入 `replan_builder.py`。
+2. 基于失败 step、已完成 step、当前 state 生成剩余计划。
+3. 为每次 replan 记录 parent-child plan 关系。
+4. 限制最大 replan 次数，避免无限循环。
 
-目标：先让 Planner 产出的 step 元数据具备足够语义，但暂时仍不负责执行。
+验收标准：
 
-建议动作：
+- 至少一类失败场景可自动 replan 恢复。
+- replan 后不会重复执行已成功且幂等安全的步骤。
 
-1. 新增 `backend/workflow/plan_mode/plan_schema.py`
-   - 定义 `Plan`
-   - 定义 `PlanStep`
-   - 定义 `PlanPolicy`
-2. 将当前 `ExecutionStep` 逐步对齐到 `PlanStep`，补充字段：
-   - `depends_on`
-   - `preconditions`
-   - `retry`
-   - `intent`
-   - `action`
-3. 新增 `backend/workflow/plan_mode/plan_validator.py`
-   - 校验 step 写入字段是否超出 contract
-   - 校验依赖闭环
-   - 校验同层写冲突
+### Phase 4：有限并行化
 
-这一步完成后，Planner 产出的就不只是“能看”的镜像，而是“能被静态检查”的执行草案。
+目标：在不牺牲稳定性的前提下，提升吞吐和响应速度。
 
-### Phase B：引入串行 `plan_executor.py`，但先不替换 graph
+实施项：
 
-目标：先在代码中建立真正的 plan 执行器，再决定是否切图。
+1. 在 validator 中增加同层写冲突校验。
+2. executor 支持按依赖层分组执行。
+3. 为并行合并引入 merge policy。
+4. 先只开放低风险并行场景。
 
-建议动作：
+验收标准：
 
-1. 新增 `backend/workflow/plan_mode/plan_executor.py`
-2. 第一版 executor 只做串行执行：
-   - 按 `execution_steps` 顺序取 step
-   - 通过 registry + runtime 调 agent
-   - 聚合 step 结果
-3. executor 输出继续回写现有 state：
-   - `step_results`
-   - `contract_violations`
-   - 业务字段 patch
+- 并行步骤无写冲突。
+- 并行失败时可定位到具体 step，不污染其他分支结果。
 
-关键原则：
+### Phase 5：数据库级观测与可视化
 
-- 这一阶段 executor 的行为必须和现有 graph 固定链路等价。
-- 先做 feature flag 或 shadow mode，避免一上来替换主链路。
+目标：把 plan mode 变成可分析、可优化、可回归的工程系统。
 
-### Phase C：把 graph 从“节点路由图”收敛为“planner -> executor -> respond”
+实施项：
 
-目标：在 executor 行为稳定后，才真正替换编排骨架。
+1. 新增 `plan_runs / step_runs / replan_events` 表。
+2. API 返回执行摘要。
+3. 后台补充 plan 级与 step 级写库。
+4. 为前端或内部调试页面提供执行轨迹。
 
-建议动作：
+验收标准：
 
-1. `planner` 输出完整 `Plan`
-2. `graph.py` 缩减为：
-   - `planner`
-   - `executor`
-   - `respond`
-3. 原 `_route_after_xxx` 系列函数逐步下线
-
-这样做的收益：
-
-- 新增 Agent 不再需要增加新的 route 函数
-- 编排复杂度从图路由转移到 Plan/Executor，更便于测试
-
-### Phase D：支持复合任务与有限并行
-
-目标：真正体现 Plan Mode 的价值，而不是仅仅换一种串行写法。
-
-建议动作：
-
-1. Intent 层从单 intent 升级为 task bundle
-2. Planner 支持单轮输出多个 step 分支
-3. 对无写冲突步骤引入有限并行
-4. 为并行步骤补充：
-   - merge 策略
-   - 冲突策略
-   - retry 策略
-
-到这一步，系统才算真正进入 Plan Mode，而不是“带 step 元数据的旧流程”。
-
-### Phase E：最后再接入数据库级 plan observability
-
-数据库改造应当放在 executor 稳定之后，而不是现在提前做。
-
-建议动作：
-
-1. 在 `backend/sql/init_schema.sql` 中新增：
-   - `plan_runs`
-   - `step_runs`
-2. 在 `backend/storage/mysql_client.py` 中新增：
-   - `save_plan_run`
-   - `save_step_run`
-3. 在 `backend/api/chat.py` 中补充后台写库
-
-理由：
-
-- 如果现在就建表，字段设计会很容易随着 executor 设计变化而反复修改。
-- 等 `PlanStep`、executor、错误分类稳定后再落库，数据模型会更稳。
+- 可以追踪某一轮对话的完整 plan 生命周期。
+- 可以统计重试率、replan 率、降级成功率与热点失败 step。
 
 ---
 
-## 20. 推荐的后续实施顺序（Plan Mode 真正落地版）
+## 19. 具体到文件的改造建议（新目标版）
 
-基于当前已完成的 Module 1-6，建议后续严格按下面顺序推进：
+### 19.1 Planner 与 Plan Builder
 
-1. 定义 `plan_schema.py`，统一 `Plan / PlanStep / PlanPolicy`。
-2. 实现 `plan_validator.py`，让 `execution_steps` 先可校验。
-3. 让 Planner 输出从“镜像 step”升级为“标准 PlanStep 草案”。
-4. 实现串行 `plan_executor.py`，通过 feature flag 或 shadow mode 验证与旧 graph 等价。
-5. 等 executor 稳定后，再把 `graph.py` 收敛为 `planner -> executor -> respond`。
-6. 最后补 `plan_runs / step_runs` 持久化、API 返回摘要和可视化。
+- `backend/agents/planner.py`
+  - 保留入口职责，但内部聚焦为 orchestration facade。
+  - 调用 `task_extractor -> plan_builder -> validator -> replan_decider`。
+- `backend/agents/planner_metadata.py`
+  - 逐步退化为兼容层，最终让位于真正的 `plan_builder.py`。
+- `backend/workflow/plan_mode/task_extractor.py`
+  - 负责从用户输入中提取任务集合。
+- `backend/workflow/plan_mode/plan_builder.py`
+  - 负责把任务集合、当前状态和 policy 组装成灵活 Plan。
+- `backend/workflow/plan_mode/replan_builder.py`
+  - 负责失败后的剩余计划生成。
 
-一句话概括就是：
+### 19.2 Executor 与 Error Policy
 
-**当前代码已经完成了“Plan Mode 的前置解耦层”，下一阶段不要急着上数据库，应该先把 Plan 的 schema、validator 和 executor 真正建立起来。**
+- `backend/workflow/plan_mode/plan_executor.py`
+  - 从串行执行器升级为支持 fallback 与 replan 的控制器。
+- `backend/workflow/plan_mode/error_policy.py`
+  - 标准化错误类型到策略的映射。
+- `backend/workflow/plan_mode/replan_decider.py`
+  - 判断是否应该 replan、降级还是请求用户确认。
+- `backend/workflow/plan_mode/plan_validator.py`
+  - 增加同层写冲突、并行安全、幂等约束校验。
+
+### 19.3 Agent Runtime 与 Contract
+
+- `backend/agents/contracts.py`
+  - 扩展 action、timeout、retryable_errors、fallback_capabilities。
+- `backend/agents/registry.py`
+  - 保持单独注册中心角色，并为后续工具型 Agent 留出能力查询入口。
+- `backend/agents/runtime.py`
+  - 增强统一错误封装、输入校验、patch 护栏、step telemetry 和 `step_context` 注入。
+- `backend/agents/implementations/content_agent.py`
+  - 从 `current_intent` 分支逐步迁移到基于 step action 的执行。
+- `backend/agents/implementations/render_agent.py`
+  - 从“读全局 render_edit intent”迁移到“读 step action + step params”。
+- `backend/agents/implementations/gap_agent.py`
+  - 为后续 ask / analyze / refresh 等不同 action 做能力拆分预留入口。
+- `backend/agents/implementations/interview_agent.py`
+  - 为后续生成、刷新、局部重建等 action 拆分做准备。
+
+### 19.4 State、Storage、API
+
+- `backend/workflow/state.py`
+  - 增加 replan 相关运行时字段，如 `parent_plan_id`, `replan_count`, `last_plan_error`, `step_contexts`。
+- `backend/storage/mysql_client.py`
+  - 新增 `save_plan_run`, `save_step_run`, `save_replan_event`。
+- `backend/sql/init_schema.sql`
+  - 新增 `plan_runs`, `step_runs`, `replan_events`。
+- `backend/api/chat.py`
+  - 对齐现有已返回字段与后续持久化字段，避免 API 和 DB 两套 plan 语义分叉。
+- `backend/api/resume.py`
+  - 从“覆盖 `current_intent` 触发 render”迁移为显式 plan/task 入口。
+
+---
+
+## 20. 推荐优先级与落地顺序
+
+### P0：让 Planner 真正动态化
+
+1. 先引入 `step_context`，减少 agent 对 `current_intent` 的硬依赖。
+2. 引入 `tasks[]` / `intent_bundle`。
+3. 新增 `task_extractor.py`、`plan_builder.py`。
+4. 将 `planner_metadata.py` 中的固定链路拼装迁出。
+
+### P1：让 Executor 真正鲁棒化
+
+1. 建立错误分类与 `error_policy.py`。
+2. 在 executor 中接入 fallback / partial_success / degraded_success。
+3. 引入 `replan_decider.py` 与 `replan_builder.py`。
+
+### P2：让系统真正可恢复
+
+1. 增加 `parent_plan_id / replan_count / replan_events`。
+2. 打通失败后剩余计划重建。
+3. 建立 replan 上限与死循环保护。
+
+### P3：让系统真正可运营
+
+1. 落库 `plan_runs / step_runs / replan_events`。
+2. API 返回执行摘要。
+3. 建立 plan mode 关键指标面板。
+
+一句话概括：
+
+**当前阶段不再需要重复建设 plan mode 基础设施，下一阶段的重点应该从“有没有 Plan/Executor”切换为“Planner 是否能动态生成灵活计划，Executor 是否能在失败时兜底、降级并 replan”。**

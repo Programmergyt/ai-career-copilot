@@ -1,143 +1,40 @@
-"""LangGraph 图定义与编排。
-
-MVP 阶段一：
-  Planner → (JD Agent | Profile Agent) → Resume Content Agent → Resume Render Agent
-"""
+"""LangGraph definition for serial Plan Mode."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
-from workflow.state import CopilotState
 from agents.runtime import make_runtime_node
 from log import get_logger
+from workflow.plan_mode.plan_executor import plan_executor_node_async
+from workflow.state import CopilotState
 
 logger = get_logger("agent")
 
 
-def _route_after_planner(state: CopilotState) -> str:
-    """根据 Planner 识别的 intent 路由到下一个节点。"""
-    plan = state.execution_plan
-    if not plan:
-        return "respond"
-    return plan[0]
-
-
-def _route_after_jd(state: CopilotState) -> str:
-    plan = state.execution_plan
-    if "gap_agent" in plan:
-        return "gap_agent"
-    if "content_agent" in plan:
-        return "content_agent"
-    return "respond"
-
-
-def _route_after_profile(state: CopilotState) -> str:
-    plan = state.execution_plan
-    if "content_agent" in plan:
-        return "content_agent"
-    return "respond"
-
-
-def _route_after_gap(state: CopilotState) -> str:
-    plan = state.execution_plan
-    if "content_agent" in plan:
-        return "content_agent"
-    return "respond"
-
-
-def _route_after_content(state: CopilotState) -> str:
-    plan = state.execution_plan
-    if "render_agent" in plan:
-        return "render_agent"
-    return "respond"
-
-
-def _route_after_render(state: CopilotState) -> str:
-    plan = state.execution_plan
-    if "interview_agent" in plan:
-        return "interview_agent"
-    return "respond"
-
-
 def _respond(state: CopilotState) -> dict[str, Any]:
-    """最终响应节点 — 收集结果。"""
+    """Final response node."""
     if not state.reply_message:
         return {"reply_message": "已处理完成。"}
     return {}
 
 
 def build_graph() -> StateGraph:
-    """构建主 workflow 图。"""
+    """Build the plan-mode workflow graph."""
     graph = StateGraph(CopilotState)
-
-    # 添加节点
     graph.add_node("planner", make_runtime_node("planner"))
-    graph.add_node("jd_agent", make_runtime_node("jd_agent"))
-    graph.add_node("profile_agent", make_runtime_node("profile_agent"))
-    graph.add_node("gap_agent", make_runtime_node("gap_agent"))
-    graph.add_node("content_agent", make_runtime_node("content_agent"))
-    graph.add_node("render_agent", make_runtime_node("render_agent"))
-    graph.add_node("interview_agent", make_runtime_node("interview_agent"))
+    graph.add_node("executor", plan_executor_node_async)
     graph.add_node("respond", _respond)
 
-    # 入口
     graph.set_entry_point("planner")
-
-    # Planner 路由
-    graph.add_conditional_edges("planner", _route_after_planner, {
-        "jd_agent": "jd_agent",
-        "profile_agent": "profile_agent",
-        "gap_agent": "gap_agent",
-        "content_agent": "content_agent",
-        "render_agent": "render_agent",
-        "interview_agent": "interview_agent",
-        "respond": "respond",
-    })
-
-    # JD Agent → Content or Respond
-    graph.add_conditional_edges("jd_agent", _route_after_jd, {
-        "gap_agent": "gap_agent",
-        "content_agent": "content_agent",
-        "respond": "respond",
-    })
-
-    # Profile Agent → Content or Respond
-    graph.add_conditional_edges("profile_agent", _route_after_profile, {
-        "content_agent": "content_agent",
-        "respond": "respond",
-    })
-
-    # Gap Agent → Content or Respond
-    graph.add_conditional_edges("gap_agent", _route_after_gap, {
-        "content_agent": "content_agent",
-        "respond": "respond",
-    })
-
-    # Content Agent → Render or Respond
-    graph.add_conditional_edges("content_agent", _route_after_content, {
-        "render_agent": "render_agent",
-        "respond": "respond",
-    })
-
-    # Render Agent → Interview or Respond
-    graph.add_conditional_edges("render_agent", _route_after_render, {
-        "interview_agent": "interview_agent",
-        "respond": "respond",
-    })
-
-    # Interview Agent → Respond
-    graph.add_edge("interview_agent", "respond")
-
-    # Respond → END
+    graph.add_edge("planner", "executor")
+    graph.add_edge("executor", "respond")
     graph.add_edge("respond", END)
-
     return graph
 
 
 def compile_graph():
-    """编译并返回可执行图。"""
-    g = build_graph()
-    return g.compile()
+    """Compile and return the executable graph."""
+    return build_graph().compile()
