@@ -17,6 +17,8 @@ from config_loader import (
     get_redis_config,
     get_mysql_config,
     get_fastapi_config,
+    get_plan_mode_config,
+    is_llm_plan_enabled,
     get_testing_config,
     should_run_real_llm_integration_tests,
 )
@@ -178,4 +180,16 @@ class TestTestingConfig:
         cfg = get_testing_config()
         assert "integration" in cfg
         assert "run_real_llm_tests" in cfg["integration"]
+
+
+class TestPlanModeConfig:
+
+    def test_plan_mode_config_has_enable_llm_plan(self):
+        cfg = get_plan_mode_config()
+        assert "ENABLE_LLM_PLAN" in cfg
+        assert isinstance(cfg["ENABLE_LLM_PLAN"], bool)
+
+    def test_is_llm_plan_enabled_respects_env_override(self):
+        with patch.dict(os.environ, {"ENABLE_LLM_PLAN": "true"}, clear=False):
+            assert is_llm_plan_enabled() is True
 

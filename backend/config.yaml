@@ -55,4 +55,7 @@ testing:
   integration:
     run_real_llm_tests: true # 是否使用真实LLM API来进行测试，开启后需要确保环境变量中有正确的API Key
 
+plan_mode:
+  ENABLE_LLM_PLAN: true # 是否启用 LLM 直接生成静态计划，false 时走规则计划
+
 

@@ -33,6 +33,19 @@ def _resolve_int_override(env_var_name: str, default: int) -> int:
         return default
 
 
+def _resolve_bool_override(env_var_name: str, default: bool) -> bool:
+    """解析布尔环境变量覆盖，无效值时回退默认值。"""
+    raw = _resolve_env_override(env_var_name, "")
+    if raw == "":
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _get_dotenv() -> dict:
     """加载 backend/.env 文件内容（缓存），与当前工作目录无关。"""
     global _dotenv
@@ -171,9 +184,23 @@ def get_fastapi_config() -> dict:
     return {
         "host": _resolve_env_override("FASTAPI_HOST", cfg.get("host", "0.0.0.0")),
         "port": _resolve_int_override("FASTAPI_PORT", cfg.get("port", 8000)),
-        "debug": _resolve_env_override("FASTAPI_DEBUG", str(cfg.get("debug", False))).lower() in {"1", "true", "yes", "on"},
+        "debug": _resolve_bool_override("FASTAPI_DEBUG", bool(cfg.get("debug", False))),
         "workers": _resolve_int_override("FASTAPI_WORKERS", cfg.get("workers", 2)),
     }
+
+
+def get_plan_mode_config() -> dict:
+    """返回 Plan Mode 配置（ENABLE_LLM_PLAN）。"""
+    cfg = get_config().get("plan_mode", {})
+    default_enabled = bool(cfg.get("ENABLE_LLM_PLAN", cfg.get("enable_llm_plan", False)))
+    return {
+        "ENABLE_LLM_PLAN": _resolve_bool_override("ENABLE_LLM_PLAN", default_enabled),
+    }
+
+
+def is_llm_plan_enabled() -> bool:
+    """返回是否启用 LLM 静态计划生成。"""
+    return get_plan_mode_config()["ENABLE_LLM_PLAN"]
 
 
 def get_rag_config() -> dict:
