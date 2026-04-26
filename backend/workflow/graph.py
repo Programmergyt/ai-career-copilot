@@ -18,6 +18,7 @@ from agents.gap_agent import gap_node_async
 from agents.content_agent import content_node_async
 from agents.render_agent import render_node_async
 from agents.interview_agent import interview_node_async
+from agents.question_agent import question_node_async
 from log import get_logger
 
 logger = get_logger("agent")
@@ -87,6 +88,7 @@ def build_graph() -> StateGraph:
     graph.add_node("content_agent", content_node_async)
     graph.add_node("render_agent", render_node_async)
     graph.add_node("interview_agent", interview_node_async)
+    graph.add_node("question_agent", question_node_async)
     graph.add_node("respond", _respond)
 
     # 入口
@@ -100,6 +102,7 @@ def build_graph() -> StateGraph:
         "content_agent": "content_agent",
         "render_agent": "render_agent",
         "interview_agent": "interview_agent",
+        "question_agent": "question_agent",
         "respond": "respond",
     })
 
@@ -136,6 +139,9 @@ def build_graph() -> StateGraph:
 
     # Interview Agent → Respond
     graph.add_edge("interview_agent", "respond")
+
+    # Question Agent → Respond
+    graph.add_edge("question_agent", "respond")
 
     # Respond → END
     graph.add_edge("respond", END)

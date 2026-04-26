@@ -24,6 +24,10 @@ class TestRouting:
         state = CopilotState(execution_plan=["render_agent"])
         assert _route_after_planner(state) == "render_agent"
 
+    def test_route_after_planner_question(self):
+        state = CopilotState(execution_plan=["question_agent"])
+        assert _route_after_planner(state) == "question_agent"
+
     def test_route_after_jd_to_gap(self):
         state = CopilotState(execution_plan=["jd_agent", "gap_agent"])
         assert _route_after_jd(state) == "gap_agent"
@@ -75,5 +79,5 @@ class TestBuildGraph:
     def test_build_graph_has_expected_nodes(self):
         graph = build_graph()
         node_names = set(graph.nodes.keys())
-        expected = {"planner", "jd_agent", "profile_agent", "gap_agent", "content_agent", "render_agent", "interview_agent", "respond"}
+        expected = {"planner", "jd_agent", "profile_agent", "gap_agent", "content_agent", "render_agent", "interview_agent", "question_agent", "respond"}
         assert expected.issubset(node_names)

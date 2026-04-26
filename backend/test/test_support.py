@@ -218,6 +218,9 @@ class PromptRouterLLM:
                 ]
             }, ensure_ascii=False))
 
+        if "职业助手问答专家" in text or "当前 graph state JSON" in text:
+            return _FakeResponse("当前状态显示目标岗位是 AIGC工程师，候选人是林知遥。")
+
         return _FakeResponse(json.dumps({"intent": "ask_question", "reason": "fallback"}, ensure_ascii=False))
 
 
@@ -230,6 +233,7 @@ def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     import agents.content_agent as content_agent
     import agents.render_agent as render_agent
     import agents.interview_agent as interview_agent
+    import agents.question_agent as question_agent
 
     monkeypatch.setattr(planner, "get_llm", lambda: llm)
     monkeypatch.setattr(jd_agent, "get_llm", lambda: llm)
@@ -238,6 +242,7 @@ def patch_all_agent_llm(monkeypatch, llm: PromptRouterLLM) -> None:
     monkeypatch.setattr(content_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(render_agent, "get_llm", lambda: llm)
     monkeypatch.setattr(interview_agent, "get_llm", lambda: llm)
+    monkeypatch.setattr(question_agent, "get_llm", lambda: llm)
 
 
 def ensure_langsmith_enabled() -> str | None:

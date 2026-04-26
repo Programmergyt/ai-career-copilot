@@ -13,6 +13,7 @@ from agents.gap_agent import gap_node
 from agents.content_agent import content_node
 from agents.render_agent import render_node
 from agents.interview_agent import interview_node
+from agents.question_agent import question_node
 from workflow.state import (
     CopilotState, Job, CandidateProfile, ProfileBasic,
     ResumeContent, ResumeProfile, ResumeContentMeta, SectionItem, Education,
@@ -40,7 +41,7 @@ class BrokenThenRepairedInterviewLLM:
     def invoke(self, prompt):
         self.calls += 1
         if self.calls == 1:
-            return _FakeResponse('{"interview_qa": [{"id": "qa_1", "question": "bad"}')
+            return _FakeResponse('{"interview_qa": [')
         return _FakeResponse(json.dumps({
             "interview_qa": [
                 {
@@ -80,7 +81,7 @@ def fixture_profile_text() -> str:
 
 @pytest.fixture
 def fixture_project_text() -> str:
-    return read_fixture_text("projects", "求职Agent_README.md")
+    return read_fixture_text("profiles", "求职Agent_README.md")
 
 
 def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
@@ -109,6 +110,39 @@ def test_planner_node_skips_content_when_no_job(monkeypatch, fixture_profile_tex
 
     assert updates["current_intent"] == "upload_profile"
     assert updates["execution_plan"] == ["profile_agent", "content_agent", "render_agent", "interview_agent"]
+
+
+def test_planner_node_routes_gap_analysis_to_gap_agent(monkeypatch):
+    llm = PromptRouterLLM(intent="gap_analysis")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_planner_gap",
+        user_message="分析一下我和这个岗位还有哪些差距",
+        job=Job(id="job_1", title="AIGC工程师"),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+    )
+    updates = planner_node(state)
+
+    assert updates["current_intent"] == "gap_analysis"
+    assert updates["execution_plan"] == ["gap_agent"]
+    assert updates["triggered_agents"] == ["gap_agent"]
+
+
+def test_planner_node_routes_ask_question_to_question_agent(monkeypatch):
+    llm = PromptRouterLLM(intent="ask_question")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_planner_question",
+        user_message="我当前的目标岗位是什么？",
+        job=Job(id="job_1", title="AIGC工程师"),
+    )
+    updates = planner_node(state)
+
+    assert updates["current_intent"] == "ask_question"
+    assert updates["execution_plan"] == ["question_agent"]
+    assert updates["triggered_agents"] == ["question_agent"]
 
 
 def test_jd_node_parses_job_from_fixture(monkeypatch, fixture_jd_text):
@@ -155,6 +189,22 @@ def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
     assert updates["gaps"]
     assert updates["questions_to_ask"]
     assert updates["questions_to_ask"][0].status == "pending"
+
+
+def test_question_node_answers_from_state(monkeypatch):
+    llm = PromptRouterLLM(intent="ask_question")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_question",
+        user_message="我当前的目标岗位和候选人是谁？",
+        job=Job(id="job_1", title="AIGC工程师"),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+    )
+    updates = question_node(state)
+
+    assert "AIGC工程师" in updates["reply_message"]
+    assert "林知遥" in updates["reply_message"]
 
 
 def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fixture_profile_text):

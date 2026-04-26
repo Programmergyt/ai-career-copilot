@@ -20,10 +20,11 @@ logger = get_logger("agent")
 _INTENT_PLAN: dict[str, list[str]] = {
     "upload_jd": ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"],
     "upload_profile": ["profile_agent", "content_agent", "render_agent", "interview_agent"],
+    "gap_analysis": ["gap_agent"],
     "content_edit": ["content_agent", "render_agent"],
     "render_edit": ["render_agent"],
     "export": [],
-    "ask_question": ["gap_agent"],
+    "ask_question": ["question_agent"],
 }
 
 

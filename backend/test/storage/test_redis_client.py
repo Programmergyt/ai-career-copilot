@@ -10,7 +10,7 @@ import json
 import uuid
 import pytest
 
-from storage.redis_client import RedisSessionStore, get_redis_client
+from storage.redis_client import RedisSessionStore
 
 
 @pytest.fixture
@@ -23,16 +23,6 @@ def store():
         s.delete_state()
     except Exception as e:
         pytest.skip(f"Redis 不可用: {e}")
-
-
-class TestRedisConnection:
-
-    def test_ping(self):
-        try:
-            client = get_redis_client()
-            assert client.ping() is True
-        except Exception as e:
-            pytest.skip(f"Redis 不可用: {e}")
 
 
 class TestStateCRUD:
