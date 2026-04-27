@@ -52,16 +52,28 @@
 .project-intro {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   color: var(--text);
+  animation: panelFadeIn 0.24s ease both;
 }
 
 .hero-card,
 .info-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #fff;
   border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.hero-card:hover,
+.info-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 
 .hero-card {
@@ -72,14 +84,14 @@
   margin: 0 0 8px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--primary);
 }
 
 .hero-card h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.3;
 }
 
@@ -106,7 +118,12 @@
   border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
-  transition: transform var(--transition), box-shadow var(--transition);
+  border: 1px solid transparent;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
 }
 
 .hero-links a:first-child {
@@ -115,13 +132,14 @@
 }
 
 .hero-links a:last-child {
-  background: #eef6ff;
-  color: #1d4ed8;
+  background: #fff;
+  border-color: var(--border);
+  color: var(--primary);
 }
 
 .hero-links a:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+  box-shadow: 0 8px 18px rgba(26, 115, 232, 0.16);
 }
 
 .grid {

@@ -7,7 +7,7 @@
         :class="['tab-btn', { active: activeTab === tab.key }]"
         @click="activeTab = tab.key"
       >
-        {{ tab.icon }} {{ tab.label }}
+        {{ tab.label }}
         <span v-if="tab.badge" class="tab-badge">{{ tab.badge }}</span>
       </button>
     </div>
@@ -68,17 +68,16 @@ const props = defineProps({
 const activeTab = ref('job')
 
 const tabs = computed(() => [
-  { key: 'intro', label: '项目介绍', icon: '✨', badge: '' },
-  { key: 'job', label: '岗位分析', icon: '📋', badge: props.job ? '' : '' },
-  { key: 'resume', label: '简历预览', icon: '📄', badge: '' },
+  { key: 'intro', label: '项目介绍', badge: '' },
+  { key: 'job', label: '岗位分析', badge: props.job ? '' : '' },
+  { key: 'resume', label: '简历预览', badge: '' },
   {
     key: 'gaps',
     label: '缺失信息',
-    icon: '❓',
     badge: props.questions?.length || '',
   },
-  { key: 'interview', label: '面试问答', icon: '🎤', badge: '' },
-  { key: 'debug', label: '调试', icon: '🔧', badge: '' },
+  { key: 'interview', label: '面试问答', badge: '' },
+  { key: 'debug', label: '调试', badge: '' },
 ])
 </script>
 
@@ -93,31 +92,38 @@ const tabs = computed(() => [
 
 .tab-bar {
   display: flex;
+  gap: 4px;
   border-bottom: 1px solid var(--border);
-  padding: 0 12px;
+  padding: 10px 12px;
   flex-shrink: 0;
   overflow-x: auto;
+  background: rgba(255, 255, 255, 0.96);
 }
 .tab-btn {
-  padding: 12px 16px;
-  background: none;
+  padding: 8px 13px;
+  border-radius: 999px;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: all var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    box-shadow var(--transition);
   position: relative;
 }
 .tab-btn:hover {
-  color: var(--text);
+  color: var(--primary);
+  background: var(--primary-subtle);
 }
 .tab-btn.active {
   color: var(--primary);
-  border-bottom-color: var(--primary);
+  background: var(--primary-soft);
   font-weight: 500;
+  box-shadow: inset 0 0 0 1px rgba(26, 115, 232, 0.12);
 }
 .tab-badge {
-  background: var(--danger);
+  background: var(--primary);
   color: #fff;
   font-size: 11px;
   padding: 0 6px;
@@ -128,6 +134,7 @@ const tabs = computed(() => [
 .tab-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 22px;
+  background: var(--surface);
 }
 </style>

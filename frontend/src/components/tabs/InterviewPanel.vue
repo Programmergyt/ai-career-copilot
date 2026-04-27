@@ -1,7 +1,7 @@
 <template>
   <div class="interview-panel">
     <div v-if="!interviewQa?.length" class="empty-state">
-      <div class="empty-icon">🎤</div>
+      <div class="empty-mark" aria-hidden="true"></div>
       <p>面试问答尚未生成</p>
       <p class="hint">完成简历内容生成后，系统将自动生成面试题</p>
     </div>
@@ -84,15 +84,40 @@ function toggleQa(index) {
 <style scoped>
 .interview-panel {
   max-width: 720px;
+  animation: panelFadeIn 0.24s ease both;
 }
 .empty-state {
   text-align: center;
   padding: 80px 20px;
   color: var(--text-secondary);
 }
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.empty-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.empty-mark::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 10px;
+  width: 10px;
+  height: 17px;
+  border: 2px solid var(--primary);
+  border-radius: 999px;
+}
+.empty-mark::after {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: 28px;
+  width: 2px;
+  height: 7px;
+  background: var(--primary);
 }
 .hint {
   font-size: 13px;
@@ -108,14 +133,21 @@ function toggleQa(index) {
 
 .toolbar-btn {
   padding: 6px 12px;
-  background: var(--bg);
-  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   font-size: 12px;
-  color: var(--text);
+  color: var(--primary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .toolbar-btn:hover {
-  background: var(--border);
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .qa-count {
@@ -125,10 +157,21 @@ function toggleQa(index) {
 }
 
 .qa-card {
-  background: var(--bg);
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 10px;
   overflow: hidden;
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+.qa-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 .qa-header {
   display: flex;
@@ -139,7 +182,7 @@ function toggleQa(index) {
   transition: background var(--transition);
 }
 .qa-header:hover {
-  background: #f0f0f0;
+  background: var(--primary-subtle);
 }
 .qa-index {
   font-weight: 700;
@@ -149,10 +192,10 @@ function toggleQa(index) {
 }
 .qa-type {
   font-size: 11px;
-  background: #eef2ff;
+  background: var(--primary-soft);
   color: var(--primary);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
   flex-shrink: 0;
 }
 .qa-question {
