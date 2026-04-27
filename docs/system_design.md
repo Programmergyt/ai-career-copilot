@@ -80,7 +80,9 @@ Planner Agent
        ↓
      Interview Agent → state.interview_qa
        ↓
-  Planner Agent → state.conversation_events, state.meta
+  Planner/Agents → state.workflow_trace（运行时，不持久化）
+       ↓
+  Respond 节点 → state.reply_message
   ↓
 返回响应（含所有更新后的状态字段）
 ```
@@ -130,7 +132,7 @@ Export Service
 | Key 模式 | 值 | TTL |
 |----------|-----|-----|
 | `session:{session_id}:state` | 完整 state JSON | 24h |
-| `session:{session_id}:events` | conversation_events 列表 | 24h |
+| `session:{session_id}:events` | conversation_events 列表（历史事件扩展用） | 24h |
 | `session:{session_id}:lock` | 分布式锁（防并发写入）| 30s |
 
 ### 4.2 MySQL
@@ -272,6 +274,8 @@ CREATE TABLE conversation_events (
   "reply_message": "string"
 }
 ```
+
+`reply_message` 由 workflow 的 Respond 节点统一生成。Respond 读取本轮运行时 `workflow_trace`，用稳定 Markdown 模板输出用户输入、意图识别、执行计划、节点产物和最终结果；`workflow_trace` 暂不持久化到 Redis/MySQL。
 
 ### `POST /api/resume/render`
 

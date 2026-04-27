@@ -12,6 +12,7 @@ from agents.json_contracts import IntentClassificationOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
 from workflow.state import CopilotState
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -67,7 +68,14 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
             "current_intent": "ask_question",
             "execution_plan": [],
             "triggered_agents": [],
-            "reply_message": "意图识别失败：模型输出格式异常，请稍后重试。",
+            "workflow_trace": append_trace(
+                state,
+                node="planner",
+                status="failed",
+                input_summary=f"用户输入：{summarize_user_message(state.user_message)}",
+                output_summary="意图识别失败：模型输出格式异常，请稍后重试。",
+                error=str(exc),
+            ),
         }
 
     intent = intent_result.intent or "ask_question"
@@ -83,14 +91,30 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
         "current_intent": intent,
         "execution_plan": plan,
         "triggered_agents": list(plan),
+        "workflow_trace": append_trace(
+            state,
+            node="planner",
+            input_summary=f"用户输入：{summarize_user_message(state.user_message)}",
+            output_summary=f"识别意图为 {intent}，执行计划为 {' -> '.join(plan) if plan else '无后续 Agent'}。",
+            artifacts={
+                "intent": intent,
+                "reason": intent_result.reason,
+                "execution_plan": plan,
+            },
+        ),
     }
 
     # 无需执行 Agent 的意图直接回复
     if not plan:
         if intent == "export":
-            updates["reply_message"] = "导出功能将在后续版本中支持。"
-        elif intent == "ask_question":
-            updates["reply_message"] = intent_result.reason or "请提供更多信息。"
+            updates["workflow_trace"] = append_trace(
+                state.model_copy(update={"workflow_trace": updates["workflow_trace"]}),
+                node="export",
+                status="skipped",
+                input_summary="用户请求导出。",
+                output_summary="导出功能将在后续版本中支持。",
+                artifacts={"supported": False},
+            )
 
     updates["meta"] = state.meta.model_copy(update={
         "last_user_message_id": message_id,

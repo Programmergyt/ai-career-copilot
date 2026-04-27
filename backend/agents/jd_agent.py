@@ -11,6 +11,7 @@ from agents.json_contracts import JDAnalysisOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.jd_analysis import JD_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Job
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -29,7 +30,14 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("JD Agent failed: %s", exc)
         return {
-            "reply_message": "岗位解析失败：模型输出格式异常，请重试。",
+            "workflow_trace": append_trace(
+                state,
+                node="jd_agent",
+                status="failed",
+                input_summary=f"解析岗位文本：{summarize_user_message(jd_text)}",
+                output_summary="岗位解析失败：模型输出格式异常，请重试。",
+                error=str(exc),
+            ),
         }
 
     now = datetime.now(timezone.utc).isoformat()
@@ -70,7 +78,20 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "job": job,
         "meta": meta,
-        "reply_message": f"已解析岗位：{job.title}（{job.industry}）",
+        "workflow_trace": append_trace(
+            state,
+            node="jd_agent",
+            input_summary=f"解析岗位文本：{summarize_user_message(jd_text)}",
+            output_summary=f"已解析岗位：{job.title}（{job.industry}）。",
+            artifacts={
+                "job_title": job.title,
+                "industry": job.industry,
+                "tech_stack_count": len(job.tech_stack),
+                "hard_skill_count": len(job.hard_skills),
+                "responsibility_count": len(job.responsibilities),
+                "version": job.version,
+            },
+        ),
     }
 
 

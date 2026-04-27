@@ -13,6 +13,7 @@ from prompts.profile_extraction import PROFILE_EXTRACTION_PROMPT
 from workflow.state import (
     CopilotState, CandidateProfile, ProfileBasic, Material, Fact,
 )
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -40,7 +41,14 @@ async def profile_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("Profile Agent failed: %s", exc)
         return {
-            "reply_message": "候选人画像解析失败：模型输出格式异常，请重试。",
+            "workflow_trace": append_trace(
+                state,
+                node="profile_agent",
+                status="failed",
+                input_summary=f"解析候选人材料：{summarize_user_message(material_text)}",
+                output_summary="候选人画像解析失败：模型输出格式异常，请重试。",
+                error=str(exc),
+            ),
         }
 
     # 构建 profile
@@ -118,7 +126,17 @@ async def profile_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "candidate_profile": profile,
         "meta": meta,
-        "reply_message": f"已更新候选人画像：{new_basic.name}，共 {len(existing_facts)} 条事实记录。",
+        "workflow_trace": append_trace(
+            state,
+            node="profile_agent",
+            input_summary=f"解析候选人材料：{summarize_user_message(material_text)}",
+            output_summary=f"已更新候选人画像：{new_basic.name or '未命名候选人'}，共 {len(existing_facts)} 条事实记录。",
+            artifacts={
+                "candidate_name": new_basic.name,
+                "material_count": len(materials),
+                "fact_count": len(existing_facts),
+            },
+        ),
     }
 
 

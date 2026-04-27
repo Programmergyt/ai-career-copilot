@@ -8,6 +8,7 @@ from typing import Any
 
 from models.llm import get_llm, _ainvoke_model, _extract_text_content
 from workflow.state import CopilotState
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -32,6 +33,7 @@ def _compact_state_context(state: CopilotState) -> dict[str, Any]:
             "triggered_agents",
             "reply_message",
             "conversation_events",
+            "workflow_trace",
         }
     )
     resume_html = state_context.get("resume_html") or {}
@@ -62,7 +64,15 @@ async def question_node_async(state: CopilotState) -> dict[str, Any]:
     if not answer:
         answer = "我暂时没有从当前状态中找到可回答的信息。可以补充岗位、个人材料或先生成简历后再问我。"
 
-    return {"reply_message": answer}
+    return {
+        "workflow_trace": append_trace(
+            state,
+            node="question_agent",
+            input_summary=f"根据当前 graph state 回答问题：{summarize_user_message(state.user_message)}",
+            output_summary=answer,
+            artifacts={"answer_length": len(answer)},
+        )
+    }
 
 
 def question_node(state: CopilotState) -> dict[str, Any]:

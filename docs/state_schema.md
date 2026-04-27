@@ -19,7 +19,8 @@
   "interview_qa": "InterviewQA[]",
   "conversation_events": "ConversationEvent[]",
   "meta": "Meta",
-  "pending_actions": "PendingAction[]"
+  "pending_actions": "PendingAction[]",
+  "workflow_trace": "WorkflowTraceItem[] (runtime only)"
 }
 ```
 
@@ -270,6 +271,24 @@
 
 ---
 
+## `WorkflowTraceItem`（运行时字段）
+
+`workflow_trace` 记录当前 graph 运行内从用户输入到最终输出的过程，用于 Respond 节点稳定拼装 `reply_message`。该字段暂不写入 Redis 或 MySQL。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| node | string | 是 | planner / jd_agent / profile_agent / gap_agent / content_agent / render_agent / interview_agent / question_agent / export |
+| status | string | 是 | success / skipped / failed |
+| input_summary | string | 否 | 节点输入摘要 |
+| output_summary | string | 是 | 节点产物或错误摘要 |
+| artifacts | object | 否 | 结构化产物摘要，如 job_title、gap_count、resume_content_version |
+| error | string | 否 | 失败错误信息 |
+| created_at | string (ISO 8601) | 是 | 创建时间 |
+
+写入者：Planner Agent 和各业务 Agent；消费方：Respond 节点
+
+---
+
 ## `Meta`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -314,6 +333,6 @@
 1. `resume_content_json` 是简历事实的唯一真值来源
 2. `resume_html` 只能由 `resume_content_json + render_config` 派生，禁止回写事实层
 3. 所有 section item 必须有稳定 `id`
-4. `conversation_events` 可回放最近一次状态变化路径
+4. `workflow_trace` 可回放本轮运行路径，但暂不持久化
 5. `content_dirty=true` 时，`resume_html` 和 `interview_qa` 视为过期
 6. `render_dirty=true` 时，只重新生成 `resume_html`，不重跑内容链路

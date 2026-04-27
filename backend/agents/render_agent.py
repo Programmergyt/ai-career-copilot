@@ -12,6 +12,7 @@ from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.render_instruction import RENDER_INSTRUCTION_PROMPT
 from tools.template_renderer import render_resume_html
 from workflow.state import CopilotState, RenderConfig, ResumeHtml, PageMargin
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -65,7 +66,14 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
         except RuntimeError as exc:
             logger.error("Resume Render Agent failed: %s", exc)
             return {
-                "reply_message": "渲染配置解析失败：模型输出格式异常，请重试。",
+                "workflow_trace": append_trace(
+                    state,
+                    node="render_agent",
+                    status="failed",
+                    input_summary=f"解析渲染指令：{summarize_user_message(state.user_message)}",
+                    output_summary="渲染配置解析失败：模型输出格式异常，请重试。",
+                    error=str(exc),
+                ),
             }
         logger.info("Render config updated to v%d", render_config.version)
     else:
@@ -80,7 +88,14 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
     if resume_content is None:
         return {
             "render_config": render_config,
-            "reply_message": "暂无简历内容，无法渲染。",
+            "workflow_trace": append_trace(
+                state,
+                node="render_agent",
+                status="skipped",
+                input_summary=f"准备渲染简历：{summarize_user_message(state.user_message)}",
+                output_summary="暂无简历内容，无法渲染。",
+                artifacts={"render_config_version": render_config.version},
+            ),
         }
 
     html_str = render_resume_html(resume_content, render_config)
@@ -114,7 +129,20 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
         "render_config": render_config,
         "resume_html": resume_html,
         "meta": meta,
-        "reply_message": msg,
+        "workflow_trace": append_trace(
+            state,
+            node="render_agent",
+            input_summary=f"生成简历 HTML：{summarize_user_message(state.user_message)}",
+            output_summary=msg,
+            artifacts={
+                "render_config_version": render_config.version,
+                "resume_html_version": resume_html.version,
+                "derived_from_content_version": resume_html.derived_from_content_version,
+                "layout_mode": render_config.layout_mode,
+                "template_id": render_config.template_id,
+                "checksum": resume_html.checksum,
+            },
+        ),
     }
 
 
