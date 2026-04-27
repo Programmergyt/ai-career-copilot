@@ -13,6 +13,7 @@ from agents.gap_agent import gap_node
 from agents.content_agent import content_node
 from agents.render_agent import render_node
 from agents.interview_agent import interview_node
+from agents.question_agent import question_node
 from workflow.state import (
     CopilotState, Job, CandidateProfile, ProfileBasic,
     ResumeContent, ResumeProfile, ResumeContentMeta, SectionItem, Education,
@@ -40,7 +41,7 @@ class BrokenThenRepairedInterviewLLM:
     def invoke(self, prompt):
         self.calls += 1
         if self.calls == 1:
-            return _FakeResponse('{"interview_qa": [{"id": "qa_1", "question": "bad"}')
+            return _FakeResponse('{"interview_qa": [')
         return _FakeResponse(json.dumps({
             "interview_qa": [
                 {
@@ -80,7 +81,7 @@ def fixture_profile_text() -> str:
 
 @pytest.fixture
 def fixture_project_text() -> str:
-    return read_fixture_text("projects", "求职Agent_README.md")
+    return read_fixture_text("profiles", "求职Agent_README.md")
 
 
 def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
@@ -98,6 +99,8 @@ def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
     assert updates["current_intent"] == "upload_jd"
     assert updates["execution_plan"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
     assert updates["triggered_agents"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
+    assert updates["workflow_trace"][-1].node == "planner"
+    assert updates["workflow_trace"][-1].artifacts["intent"] == "upload_jd"
 
 
 def test_planner_node_skips_content_when_no_job(monkeypatch, fixture_profile_text):
@@ -111,6 +114,39 @@ def test_planner_node_skips_content_when_no_job(monkeypatch, fixture_profile_tex
     assert updates["execution_plan"] == ["profile_agent", "content_agent", "render_agent", "interview_agent"]
 
 
+def test_planner_node_routes_gap_analysis_to_gap_agent(monkeypatch):
+    llm = PromptRouterLLM(intent="gap_analysis")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_planner_gap",
+        user_message="分析一下我和这个岗位还有哪些差距",
+        job=Job(id="job_1", title="AIGC工程师"),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+    )
+    updates = planner_node(state)
+
+    assert updates["current_intent"] == "gap_analysis"
+    assert updates["execution_plan"] == ["gap_agent"]
+    assert updates["triggered_agents"] == ["gap_agent"]
+
+
+def test_planner_node_routes_ask_question_to_question_agent(monkeypatch):
+    llm = PromptRouterLLM(intent="ask_question")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_planner_question",
+        user_message="我当前的目标岗位是什么？",
+        job=Job(id="job_1", title="AIGC工程师"),
+    )
+    updates = planner_node(state)
+
+    assert updates["current_intent"] == "ask_question"
+    assert updates["execution_plan"] == ["question_agent"]
+    assert updates["triggered_agents"] == ["question_agent"]
+
+
 def test_jd_node_parses_job_from_fixture(monkeypatch, fixture_jd_text):
     llm = PromptRouterLLM(intent="upload_jd")
     patch_all_agent_llm(monkeypatch, llm)
@@ -122,6 +158,8 @@ def test_jd_node_parses_job_from_fixture(monkeypatch, fixture_jd_text):
     assert job.title == "AIGC工程师"
     assert "RAG" in job.tech_stack
     assert updates["meta"].dirty_flags.content_dirty is True
+    assert updates["workflow_trace"][-1].node == "jd_agent"
+    assert updates["workflow_trace"][-1].artifacts["job_title"] == "AIGC工程师"
 
 
 def test_profile_node_updates_candidate_profile(monkeypatch, fixture_profile_text, fixture_project_text):
@@ -138,6 +176,8 @@ def test_profile_node_updates_candidate_profile(monkeypatch, fixture_profile_tex
     assert profile.profile_basic.name == "林知遥"
     assert len(profile.materials) == 1
     assert len(profile.facts) >= 2
+    assert updates["workflow_trace"][-1].node == "profile_agent"
+    assert updates["workflow_trace"][-1].artifacts["candidate_name"] == "林知遥"
 
 
 def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
@@ -155,6 +195,25 @@ def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
     assert updates["gaps"]
     assert updates["questions_to_ask"]
     assert updates["questions_to_ask"][0].status == "pending"
+    assert updates["workflow_trace"][-1].node == "gap_agent"
+    assert updates["workflow_trace"][-1].artifacts["gap_count"] >= 1
+
+
+def test_question_node_answers_from_state(monkeypatch):
+    llm = PromptRouterLLM(intent="ask_question")
+    patch_all_agent_llm(monkeypatch, llm)
+
+    state = CopilotState(
+        session_id="sess_question",
+        user_message="我当前的目标岗位和候选人是谁？",
+        job=Job(id="job_1", title="AIGC工程师"),
+        candidate_profile=CandidateProfile(profile_basic=ProfileBasic(name="林知遥")),
+    )
+    updates = question_node(state)
+
+    assert updates["workflow_trace"][-1].node == "question_agent"
+    assert "AIGC工程师" in updates["workflow_trace"][-1].output_summary
+    assert "林知遥" in updates["workflow_trace"][-1].output_summary
 
 
 def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fixture_profile_text):
@@ -198,6 +257,8 @@ def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fix
 
     assert updates["interview_qa"]
     assert updates["meta"].dirty_flags.interview_dirty is False
+    assert updates["workflow_trace"][-1].node == "interview_agent"
+    assert updates["workflow_trace"][-1].artifacts["interview_qa_count"] >= 1
 
 
 def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fixture_profile_text):
@@ -219,9 +280,11 @@ def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fi
     render_updates = render_node(state)
 
     assert content_updates["resume_content_json"].meta.version >= 1
+    assert content_updates["workflow_trace"][-1].node == "content_agent"
     assert render_updates["render_config"].layout_mode == "double-column"
     assert "<html" in render_updates["resume_html"].html.lower()
     assert render_updates["meta"].dirty_flags.render_dirty is False
+    assert render_updates["workflow_trace"][-1].node == "render_agent"
 
 
 def test_interview_node_retries_once_after_invalid_json(monkeypatch, fixture_jd_text):
@@ -247,7 +310,7 @@ def test_interview_node_retries_once_after_invalid_json(monkeypatch, fixture_jd_
 
     assert llm.calls == 2
     assert len(updates["interview_qa"]) == 1
-    assert updates["reply_message"].startswith("面试问答已生成")
+    assert updates["workflow_trace"][-1].output_summary.startswith("面试问答已生成")
 
 
 def test_interview_node_reports_failure_after_retry_exhausted(monkeypatch, fixture_jd_text):
@@ -272,5 +335,6 @@ def test_interview_node_reports_failure_after_retry_exhausted(monkeypatch, fixtu
     updates = interview_node(state)
 
     assert updates["interview_qa"] == []
-    assert updates["reply_message"] == "面试问答生成失败：模型输出格式异常，请重试。"
+    assert updates["workflow_trace"][-1].output_summary == "面试问答生成失败：模型输出格式异常，请重试。"
+    assert updates["workflow_trace"][-1].status == "failed"
     assert "meta" not in updates

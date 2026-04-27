@@ -11,6 +11,7 @@ from typing import Any
 from langgraph.graph import StateGraph, END
 
 from workflow.state import CopilotState
+from workflow.trace import summarize_user_message
 from agents.planner import planner_node_async
 from agents.jd_agent import jd_node_async
 from agents.profile_agent import profile_node_async
@@ -18,6 +19,7 @@ from agents.gap_agent import gap_node_async
 from agents.content_agent import content_node_async
 from agents.render_agent import render_node_async
 from agents.interview_agent import interview_node_async
+from agents.question_agent import question_node_async
 from log import get_logger
 
 logger = get_logger("agent")
@@ -69,10 +71,69 @@ def _route_after_render(state: CopilotState) -> str:
 
 
 def _respond(state: CopilotState) -> dict[str, Any]:
-    """最终响应节点 — 收集结果。"""
-    if not state.reply_message:
-        return {"reply_message": "已处理完成。"}
-    return {}
+    """最终响应节点 — 基于本轮运行轨迹生成稳定的过程记录。"""
+    return {"reply_message": _build_trace_reply(state)}
+
+
+def _format_artifacts(artifacts: dict[str, Any]) -> str:
+    if not artifacts:
+        return ""
+    parts = []
+    for key, value in artifacts.items():
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, list):
+            value = ", ".join(str(item) for item in value)
+        parts.append(f"{key}={value}")
+    return f"（{'; '.join(parts)}）" if parts else ""
+
+
+def _build_trace_reply(state: CopilotState) -> str:
+    plan_text = " -> ".join(state.execution_plan) if state.execution_plan else "无后续 Agent"
+    lines = [
+        "已完成本轮处理。",
+        "",
+        "**执行过程**",
+        f"1. 用户输入：{summarize_user_message(state.user_message) or '空'}",
+        f"2. 意图识别：{state.current_intent or '未识别'}",
+        f"3. 执行计划：{plan_text}",
+        "4. 节点产物：",
+    ]
+
+    if state.workflow_trace:
+        for item in state.workflow_trace:
+            artifacts = _format_artifacts(item.artifacts)
+            status = item.status
+            line = f"   - {item.node} [{status}]：{item.output_summary}{artifacts}"
+            if item.error:
+                line += f"；错误：{item.error}"
+            lines.append(line)
+    else:
+        lines.append("   - respond [success]：没有可展示的节点记录。")
+
+    final_result = _final_result_summary(state)
+    lines.extend(["", "**最终结果**", final_result])
+    return "\n".join(lines)
+
+
+def _final_result_summary(state: CopilotState) -> str:
+    if state.workflow_trace:
+        failed = [item for item in state.workflow_trace if item.status == "failed"]
+        if failed:
+            return failed[-1].output_summary or "本轮处理未完成，请检查失败节点。"
+
+        if state.current_intent == "ask_question":
+            for item in reversed(state.workflow_trace):
+                if item.node == "question_agent":
+                    return item.output_summary or "问题已处理完成。"
+
+        non_planner_items = [item for item in state.workflow_trace if item.node != "planner"]
+        if non_planner_items:
+            return non_planner_items[-1].output_summary or "本轮处理已完成。"
+
+    if state.current_intent == "export":
+        return "导出功能将在后续版本中支持。"
+    return "本轮处理已完成。"
 
 
 def build_graph() -> StateGraph:
@@ -87,6 +148,7 @@ def build_graph() -> StateGraph:
     graph.add_node("content_agent", content_node_async)
     graph.add_node("render_agent", render_node_async)
     graph.add_node("interview_agent", interview_node_async)
+    graph.add_node("question_agent", question_node_async)
     graph.add_node("respond", _respond)
 
     # 入口
@@ -100,6 +162,7 @@ def build_graph() -> StateGraph:
         "content_agent": "content_agent",
         "render_agent": "render_agent",
         "interview_agent": "interview_agent",
+        "question_agent": "question_agent",
         "respond": "respond",
     })
 
@@ -136,6 +199,9 @@ def build_graph() -> StateGraph:
 
     # Interview Agent → Respond
     graph.add_edge("interview_agent", "respond")
+
+    # Question Agent → Respond
+    graph.add_edge("question_agent", "respond")
 
     # Respond → END
     graph.add_edge("respond", END)

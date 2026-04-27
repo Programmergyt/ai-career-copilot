@@ -15,6 +15,7 @@ from workflow.state import (
     CopilotState, ResumeContent, ResumeProfile, ResumeContentMeta,
     SectionItem, Education,
 )
+from workflow.trace import append_trace, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -116,7 +117,14 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("Resume Content Agent failed: %s", exc)
         return {
-            "reply_message": "简历内容生成失败：模型输出格式异常，请重试。",
+            "workflow_trace": append_trace(
+                state,
+                node="content_agent",
+                status="failed",
+                input_summary=f"根据岗位、候选人画像和用户指令生成简历内容：{summarize_user_message(state.user_message)}",
+                output_summary="简历内容生成失败：模型输出格式异常，请重试。",
+                error=str(exc),
+            ),
         }
 
     resume_content = _build_resume_from_parsed(parsed, state)
@@ -137,7 +145,20 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "resume_content_json": resume_content,
         "meta": meta,
-        "reply_message": f"简历内容已生成（v{resume_content.meta.version}）。请在右侧简历预览栏目查看最新内容。",
+        "workflow_trace": append_trace(
+            state,
+            node="content_agent",
+            input_summary=f"根据岗位、候选人画像和用户指令生成简历内容：{summarize_user_message(state.user_message)}",
+            output_summary=f"简历内容已生成（v{resume_content.meta.version}）。",
+            artifacts={
+                "resume_content_version": resume_content.meta.version,
+                "target_role": resume_content.meta.target_role,
+                "skill_count": len(resume_content.skills),
+                "project_count": len(resume_content.projects),
+                "internship_count": len(resume_content.internships),
+                "content_hash": resume_content.meta.content_hash,
+            },
+        ),
     }
 
 

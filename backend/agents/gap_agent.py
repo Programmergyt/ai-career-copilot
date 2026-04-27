@@ -10,6 +10,7 @@ from agents.json_contracts import GapAnalysisOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.gap_analysis import GAP_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Gap, Question
+from workflow.trace import append_trace
 from log import get_logger
 
 logger = get_logger("agent")
@@ -52,9 +53,19 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
     if state.job is None or state.candidate_profile is None:
         logger.warning("Gap Analysis skipped due to missing job or profile")
         return {
-            "reply_message": "缺少岗位或候选人画像，暂时无法完成缺失信息分析。",
             "gaps": [],
             "questions_to_ask": [],
+            "workflow_trace": append_trace(
+                state,
+                node="gap_agent",
+                status="skipped",
+                input_summary="读取岗位和候选人画像用于缺口分析。",
+                output_summary="缺少岗位或候选人画像，暂时无法完成缺失信息分析。",
+                artifacts={
+                    "has_job": state.job is not None,
+                    "has_candidate_profile": state.candidate_profile is not None,
+                },
+            ),
         }
 
     prompt = GAP_ANALYSIS_PROMPT.format(
@@ -67,9 +78,16 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("Gap Analysis Agent failed: %s", exc)
         return {
-            "reply_message": "缺失信息分析失败：模型输出格式异常，请重试。",
             "gaps": [],
             "questions_to_ask": [],
+            "workflow_trace": append_trace(
+                state,
+                node="gap_agent",
+                status="failed",
+                input_summary="读取岗位和候选人画像用于缺口分析。",
+                output_summary="缺失信息分析失败：模型输出格式异常，请重试。",
+                error=str(exc),
+            ),
         }
 
     gaps = _build_gap_list(parsed)
@@ -80,7 +98,17 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "gaps": gaps,
         "questions_to_ask": questions,
-        "reply_message": "缺失信息分析已完成。请在右侧缺失信息栏目查看最新内容。",
+        "workflow_trace": append_trace(
+            state,
+            node="gap_agent",
+            input_summary="读取岗位和候选人画像用于缺口分析。",
+            output_summary=f"缺失信息分析已完成，发现 {len(gaps)} 项缺口，生成 {len(questions)} 个待追问问题。",
+            artifacts={
+                "gap_count": len(gaps),
+                "question_count": len(questions),
+                "high_severity_gap_count": sum(1 for gap in gaps if gap.severity == "high"),
+            },
+        ),
     }
 
 

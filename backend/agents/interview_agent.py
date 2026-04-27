@@ -10,6 +10,7 @@ from agents.json_contracts import InterviewGenerationOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.interview_generation import INTERVIEW_GENERATION_PROMPT
 from workflow.state import CopilotState, InterviewQA
+from workflow.trace import append_trace
 from log import get_logger
 
 logger = get_logger("agent")
@@ -36,8 +37,19 @@ async def interview_node_async(state: CopilotState) -> dict[str, Any]:
     if state.job is None or state.candidate_profile is None or state.resume_content_json is None:
         logger.warning("Interview Agent skipped due to incomplete state")
         return {
-            "reply_message": "数据不完整，无法生成面试问答。",
             "interview_qa": [],
+            "workflow_trace": append_trace(
+                state,
+                node="interview_agent",
+                status="skipped",
+                input_summary="读取岗位、候选人画像和简历内容生成面试问答。",
+                output_summary="数据不完整，无法生成面试问答。",
+                artifacts={
+                    "has_job": state.job is not None,
+                    "has_candidate_profile": state.candidate_profile is not None,
+                    "has_resume_content": state.resume_content_json is not None,
+                },
+            ),
         }
 
     prompt = INTERVIEW_GENERATION_PROMPT.format(
@@ -51,8 +63,15 @@ async def interview_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("Interview Agent failed: %s", exc)
         return {
-            "reply_message": "面试问答生成失败：模型输出格式异常，请重试。",
             "interview_qa": [],
+            "workflow_trace": append_trace(
+                state,
+                node="interview_agent",
+                status="failed",
+                input_summary="读取岗位、候选人画像和简历内容生成面试问答。",
+                output_summary="面试问答生成失败：模型输出格式异常，请重试。",
+                error=str(exc),
+            ),
         }
 
     interview_qa = _build_interview_qa(parsed)
@@ -68,7 +87,16 @@ async def interview_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "interview_qa": interview_qa,
         "meta": meta,
-        "reply_message": "面试问答已生成。请在右侧面试问答栏目查看最新内容。",
+        "workflow_trace": append_trace(
+            state,
+            node="interview_agent",
+            input_summary="读取岗位、候选人画像和简历内容生成面试问答。",
+            output_summary=f"面试问答已生成，共 {len(interview_qa)} 条。",
+            artifacts={
+                "interview_qa_count": len(interview_qa),
+                "categories": sorted({item.category for item in interview_qa}),
+            },
+        ),
     }
 
 

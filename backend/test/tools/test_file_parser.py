@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tools.file_parser import parse_file, parse_content, parse_content_bytes, supported_upload_suffixes
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 class TestParseMarkdownFiles:
@@ -17,7 +17,7 @@ class TestParseMarkdownFiles:
         text = parse_file(jd_path)
         assert isinstance(text, str)
         assert len(text) > 0
-        assert "NovaWorks" in text
+        assert "InnovateCorp" in text
         assert "Generative AI" in text or "GenAI" in text
 
     def test_parse_profile_file(self):
@@ -26,10 +26,10 @@ class TestParseMarkdownFiles:
         assert isinstance(text, str)
         assert len(text) > 0
         assert "林知遥" in text
-        assert "星海理工大学" in text
+        assert "煤隆理工大学" in text
 
     def test_parse_internship_file(self):
-        intern_path = FIXTURES_DIR / "internships" / "远望工业智能实习——RAG诊断平台.md"
+        intern_path = FIXTURES_DIR / "profiles" / "远望工业智能实习——RAG诊断平台.md"
         text = parse_file(intern_path)
         assert isinstance(text, str)
         assert len(text) > 0
@@ -37,7 +37,7 @@ class TestParseMarkdownFiles:
         assert "向量" in text
 
     def test_parse_project_file(self):
-        project_path = FIXTURES_DIR / "projects" / "求职Agent_README.md"
+        project_path = FIXTURES_DIR / "profiles" / "求职Agent_README.md"
         text = parse_file(project_path)
         assert isinstance(text, str)
         assert len(text) > 0
@@ -67,12 +67,10 @@ class TestParseContent:
 
 class TestParseUnsupportedType:
 
-    def test_parse_unknown_extension_as_text(self, tmp_path):
+    def test_parse_unknown_extension_as_text(self):
         """未知扩展名应拒绝解析。"""
-        f = tmp_path / "data.xyz"
-        f.write_text("some content", encoding="utf-8")
         with pytest.raises(ValueError):
-            parse_file(f)
+            parse_file(__file__)
 
     def test_supported_upload_suffixes(self):
         assert supported_upload_suffixes() == {".pdf", ".docx", ".txt", ".md"}

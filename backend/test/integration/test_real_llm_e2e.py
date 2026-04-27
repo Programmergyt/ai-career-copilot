@@ -36,6 +36,25 @@ from workflow.graph import compile_graph
 from workflow.state import CandidateProfile, CopilotState, Job, ProfileBasic
 
 
+def _skip_external_service_unavailable(exc: Exception) -> None:
+    detail = f"{type(exc).__name__}: {exc!s} {exc!r}"
+    markers = [
+        "APIConnectionError",
+        "ConnectError",
+        "ConnectionError",
+        "Connection refused",
+        "Connection error",
+        "ConnectionRefusedError",
+        "ProxyError",
+        "WinError 10061",
+        "All connection attempts failed",
+        "actively refused",
+    ]
+    if any(marker in detail for marker in markers):
+        pytest.skip(f"真实 LLM 服务当前不可达: {exc}")
+    raise exc
+
+
 def _session_id(prefix: str) -> str:
     """为每次真实调用生成独立 session_id，避免不同测试状态互相污染。"""
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
@@ -86,6 +105,12 @@ def _real_llm_guard() -> None:
             "真实 LLM 集成测试默认关闭。运行前请在 config.yaml 中设置 "
             "testing.integration.run_real_llm_tests: true"
         )
+    try:
+        from models.llm import get_llm
+
+        get_llm().invoke("Reply only with: ok")
+    except Exception as exc:
+        _skip_external_service_unavailable(exc)
     ensure_langsmith_enabled()
 
 

@@ -93,7 +93,8 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
     final = CopilotState.model_validate(result)
 
     persist_data = final.model_dump(exclude={"user_message", "user_attachments", "current_intent",
-                                              "execution_plan", "reply_message", "triggered_agents"})
+                                              "execution_plan", "reply_message", "triggered_agents",
+                                              "workflow_trace"})
     await _asave_state(store, persist_data)
 
     background_tasks.add_task(_persist_to_mysql_safe, final)

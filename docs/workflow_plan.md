@@ -15,7 +15,9 @@ Planner Agent: State Diff Planner → 生成 execution_plan
   ↓
 Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
   ↓
-状态更新 + 记录 conversation_event
+状态更新 + 追加本轮 workflow_trace（运行时记录，不持久化）
+  ↓
+Respond 节点基于 workflow_trace 生成 reply_message
   ↓
 返回结果给前端
 ```
@@ -31,7 +33,8 @@ Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
 | content_edit | Resume Content Agent → Resume Render Agent | 跳过 Profile/Gap/Interview（除非内容变化触发 dirty） |
 | render_edit | Resume Render Agent | 只跑渲染 |
 | export | 导出服务（非 Agent）| 读取当前状态直接导出 |
-| ask_question | Gap Analysis Agent | 只读查询，不修改内容 |
+| ask_question | Question Agent | 基于当前 graph state 自由问答，不修改业务状态 |
+| gap_analysis | Gap Analysis Agent | 对当前岗位与候选人画像做缺口分析 |
 
 ---
 
@@ -69,7 +72,7 @@ Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
 | 条件 | 跳过的 Agent | 原因 |
 |------|-------------|------|
 | intent = render_edit | JD, Profile, Gap, Resume Content, Interview | 渲染不涉及内容变更 |
-| intent = ask_question | 除 Gap Analysis 外所有 | 只读查询 |
+| intent = ask_question | 除 Question Agent 外所有 | 只读查询 |
 | intent = export | 所有 Agent | 直接读取当前状态导出 |
 | `job` 为空 且 intent = upload_profile | Gap Analysis Agent | 没有 JD 无法做 Gap 分析 |
 | `candidate_profile` 为空 且 intent = upload_jd | Resume Content Agent, Resume Render Agent, Interview Agent | 没有候选人数据无法生成简历 |
@@ -95,12 +98,12 @@ Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
 
 | 失败点 | 回退策略 |
 |--------|----------|
-| JD Agent 解析失败 | 返回错误信息，不修改状态，记录 event(status=failed) |
-| Profile Agent 解析失败 | 返回错误信息，保留已有 candidate_profile |
+| JD Agent 解析失败 | 不修改状态，记录 workflow_trace(status=failed)，由 Respond 输出过程记录 |
+| Profile Agent 解析失败 | 保留已有 candidate_profile，记录 workflow_trace(status=failed) |
 | Resume Content Agent 失败 | 保留上一版 resume_content_json |
 | Resume Render Agent 失败 | 回退默认模板重试一次，仍失败则保留上一版 resume_html |
 | Interview Agent 失败 | 保留上一版 interview_qa，标记 interview_dirty=true |
-| 任何 Agent 超时 | 记录 event(status=failed)，返回超时提示 |
+| 任何 Agent 超时 | 记录 workflow_trace(status=failed)，由 Respond 输出失败节点和错误提示 |
 
 ---
 
@@ -108,7 +111,8 @@ Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
 
 1. Agent 按链路顺序串行执行，不并行
 2. 每个 Agent 执行完毕后立即写入状态并更新 dirty_flags
-3. 每轮用户输入只生成一条 conversation_event
-4. Planner Agent 记录完整执行链路到 event.triggered_agents
+3. 每轮用户输入的节点执行过程写入运行时 `workflow_trace`，暂不持久化
+4. Planner Agent 记录本轮 `current_intent`、`execution_plan` 和 `triggered_agents`
 5. 渲染指令不触发内容链路
 6. 内容指令执行后自动触发渲染链路
+7. 所有 intent 的最终 `reply_message` 都由 Respond 节点基于 `workflow_trace` 稳定拼装，包含用户输入、意图识别、执行计划、节点产物和最终结果

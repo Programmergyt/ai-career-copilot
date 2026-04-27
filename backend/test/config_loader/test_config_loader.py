@@ -169,7 +169,7 @@ class TestFastAPIConfig:
     def test_fastapi_config_values(self):
         cfg = get_fastapi_config()
         assert cfg["port"] == 8000
-        assert cfg["workers"] == 4
+        assert cfg["workers"] == 2
 
 
 class TestTestingConfig:

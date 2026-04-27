@@ -20,6 +20,36 @@ def client():
     return TestClient(app)
 
 
+def _patch_resume_state_store(monkeypatch, saved_state):
+    class DummyStore:
+        def __init__(self, session_id, client=None):
+            self.session_id = session_id
+
+        async def load_state(self):
+            return saved_state
+
+    async def dummy_get_redis_client():
+        return object()
+
+    monkeypatch.setattr("api.resume.get_redis_client", dummy_get_redis_client)
+    monkeypatch.setattr("api.resume.RedisSessionStore", DummyStore)
+
+
+def _patch_export_state_store(monkeypatch, saved_state):
+    class DummyStore:
+        def __init__(self, session_id, client=None):
+            self.session_id = session_id
+
+        async def load_state(self):
+            return saved_state
+
+    async def dummy_get_redis_client():
+        return object()
+
+    monkeypatch.setattr("api.export.get_redis_client", dummy_get_redis_client)
+    monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+
+
 class TestHealthEndpoint:
 
     def test_health_check(self, client):
@@ -46,20 +76,24 @@ class TestChatEndpoint:
 
 class TestResumeEndpoints:
 
-    def test_get_content_without_session(self, client):
+    def test_get_content_without_session(self, client, monkeypatch):
         """不存在的 session 应返回 404。"""
+        _patch_resume_state_store(monkeypatch, None)
         response = client.get("/api/resume/content", params={"session_id": "nonexistent_session"})
         assert response.status_code == 404
 
-    def test_get_html_without_session(self, client):
+    def test_get_html_without_session(self, client, monkeypatch):
+        _patch_resume_state_store(monkeypatch, None)
         response = client.get("/api/resume/html", params={"session_id": "nonexistent_session"})
         assert response.status_code == 404
 
-    def test_preview_without_session(self, client):
+    def test_preview_without_session(self, client, monkeypatch):
+        _patch_resume_state_store(monkeypatch, None)
         response = client.get("/api/resume/preview", params={"session_id": "nonexistent_session"})
         assert response.status_code == 404
 
-    def test_render_requires_session(self, client):
+    def test_render_requires_session(self, client, monkeypatch):
+        _patch_resume_state_store(monkeypatch, None)
         response = client.post("/api/resume/render", json={
             "session_id": "nonexistent_session",
             "render_instruction": "改大字号",
@@ -69,15 +103,17 @@ class TestResumeEndpoints:
 
 class TestExportEndpoint:
 
-    def test_export_without_session(self, client):
+    def test_export_without_session(self, client, monkeypatch):
+        _patch_export_state_store(monkeypatch, None)
         response = client.post("/api/export", json={
             "session_id": "nonexistent_session",
             "format": "html",
         })
         assert response.status_code == 404
 
-    def test_export_unsupported_format(self, client):
+    def test_export_unsupported_format(self, client, monkeypatch):
         """不支持的格式应返回 400（如果 session 存在）或 404。"""
+        _patch_export_state_store(monkeypatch, None)
         response = client.post("/api/export", json={
             "session_id": "nonexistent_session",
             "format": "xml",
@@ -98,14 +134,7 @@ class TestExportEndpoint:
             ),
         ).model_dump()
 
-        class DummyStore:
-            def __init__(self, session_id):
-                self.session_id = session_id
-
-            def load_state(self):
-                return saved_state
-
-        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+        _patch_export_state_store(monkeypatch, saved_state)
 
         response = client.post("/api/export", json={
             "session_id": "sess_export_job",
@@ -140,14 +169,7 @@ class TestExportEndpoint:
             ],
         ).model_dump()
 
-        class DummyStore:
-            def __init__(self, session_id):
-                self.session_id = session_id
-
-            def load_state(self):
-                return saved_state
-
-        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+        _patch_export_state_store(monkeypatch, saved_state)
 
         response = client.post("/api/export", json={
             "session_id": "sess_export_gaps",
@@ -175,14 +197,7 @@ class TestExportEndpoint:
             ],
         ).model_dump()
 
-        class DummyStore:
-            def __init__(self, session_id):
-                self.session_id = session_id
-
-            def load_state(self):
-                return saved_state
-
-        monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+        _patch_export_state_store(monkeypatch, saved_state)
 
         response = client.post("/api/export", json={
             "session_id": "sess_export_interview",
