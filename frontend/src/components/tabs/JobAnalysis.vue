@@ -1,7 +1,7 @@
 <template>
   <div class="job-analysis">
     <div v-if="!job" class="empty-state">
-      <div class="empty-icon">📋</div>
+      <div class="empty-mark" aria-hidden="true"></div>
       <p>尚未解析岗位信息</p>
       <p class="hint">在左侧对话框中粘贴 JD 或上传 JD 文件</p>
     </div>
@@ -29,7 +29,7 @@
 
       <!-- 技术栈 -->
       <section class="card" v-if="job.tech_stack?.length">
-        <h4>🛠️ 技术栈</h4>
+        <h4>技术栈</h4>
         <div class="tag-list">
           <span v-for="t in job.tech_stack" :key="t" class="tag tech">{{ t }}</span>
         </div>
@@ -37,7 +37,7 @@
 
       <!-- 硬技能 -->
       <section class="card" v-if="job.hard_skills?.length">
-        <h4>💡 硬技能</h4>
+        <h4>硬技能</h4>
         <div class="tag-list">
           <span v-for="s in job.hard_skills" :key="s" class="tag skill">{{ s }}</span>
         </div>
@@ -45,7 +45,7 @@
 
       <!-- 软技能 -->
       <section class="card" v-if="job.soft_skills?.length">
-        <h4>🤝 软技能</h4>
+        <h4>软技能</h4>
         <div class="tag-list">
           <span v-for="s in job.soft_skills" :key="s" class="tag soft">{{ s }}</span>
         </div>
@@ -53,7 +53,7 @@
 
       <!-- 职责 -->
       <section class="card" v-if="job.responsibilities?.length">
-        <h4>📌 职责</h4>
+        <h4>职责</h4>
         <ul class="list">
           <li v-for="(r, i) in job.responsibilities" :key="i">{{ r }}</li>
         </ul>
@@ -61,7 +61,7 @@
 
       <!-- 关键词 -->
       <section class="card" v-if="job.keywords?.length">
-        <h4>🔑 核心关键词</h4>
+        <h4>核心关键词</h4>
         <div class="tag-list">
           <span v-for="k in job.keywords" :key="k" class="tag keyword">{{ k }}</span>
         </div>
@@ -69,7 +69,7 @@
 
       <!-- 加分项 -->
       <section class="card" v-if="job.bonus_items?.length">
-        <h4>⭐ 加分项</h4>
+        <h4>加分项</h4>
         <ul class="list">
           <li v-for="(b, i) in job.bonus_items" :key="i">{{ b }}</li>
         </ul>
@@ -77,7 +77,7 @@
 
       <!-- Gap 分析 -->
       <section class="card" v-if="gaps?.length">
-        <h4>📊 Gap 分析</h4>
+        <h4>Gap 分析</h4>
         <div v-for="gap in gaps" :key="gap.id || gap.skill" class="gap-item">
           <div class="gap-header">
             <span class="gap-skill">{{ gap.skill || gap.area }}</span>
@@ -89,7 +89,7 @@
             </span>
           </div>
           <p v-if="gap.description" class="gap-desc">{{ gap.description }}</p>
-          <p v-if="gap.suggestion" class="gap-suggestion">💡 {{ gap.suggestion }}</p>
+          <p v-if="gap.suggestion" class="gap-suggestion">{{ gap.suggestion }}</p>
         </div>
       </section>
     </template>
@@ -130,15 +130,28 @@ function downloadBlob(blob, filename, format) {
 <style scoped>
 .job-analysis {
   max-width: 720px;
+  animation: panelFadeIn 0.24s ease both;
 }
 .empty-state {
   text-align: center;
   padding: 80px 20px;
   color: var(--text-secondary);
 }
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.empty-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.empty-mark::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border-radius: 8px;
+  border: 2px solid var(--primary);
 }
 .hint {
   font-size: 13px;
@@ -154,21 +167,39 @@ function downloadBlob(blob, filename, format) {
 
 .toolbar-btn {
   padding: 6px 12px;
-  background: var(--bg);
-  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   font-size: 12px;
-  color: var(--text);
+  color: var(--primary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .toolbar-btn:hover {
-  background: var(--border);
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .card {
-  background: var(--bg);
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 .card h3 {
   font-size: 18px;
@@ -196,13 +227,16 @@ function downloadBlob(blob, filename, format) {
 }
 .tag {
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 999px;
   font-size: 12px;
 }
-.tag.tech { background: #dbeafe; color: #1d4ed8; }
-.tag.skill { background: #dcfce7; color: #166534; }
-.tag.soft { background: #fef3c7; color: #92400e; }
-.tag.keyword { background: #ede9fe; color: #5b21b6; }
+.tag.tech,
+.tag.skill,
+.tag.soft,
+.tag.keyword {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
 
 .list {
   padding-left: 20px;
@@ -212,7 +246,7 @@ function downloadBlob(blob, filename, format) {
 
 .gap-item {
   padding: 10px;
-  background: var(--bg-white);
+  background: var(--surface);
   border-radius: 6px;
   margin-bottom: 8px;
   border: 1px solid var(--border);
@@ -228,11 +262,11 @@ function downloadBlob(blob, filename, format) {
 .gap-level {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
-.gap-level.high, .gap-level.critical { background: #fef2f2; color: var(--danger); }
-.gap-level.medium { background: #fffbeb; color: var(--warning); }
-.gap-level.low { background: #f0fdf4; color: var(--success); }
+.gap-level.high, .gap-level.critical { background: #fce8e6; color: var(--danger); }
+.gap-level.medium { background: #fff4d8; color: var(--warning); }
+.gap-level.low { background: #e6f4ea; color: var(--success); }
 .gap-desc {
   font-size: 13px;
   color: var(--text-secondary);

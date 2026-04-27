@@ -1,7 +1,7 @@
 <template>
   <div class="resume-preview">
     <div v-if="!resumeHtml?.html" class="empty-state">
-      <div class="empty-icon">📄</div>
+      <div class="empty-mark" aria-hidden="true"></div>
       <p>简历尚未生成</p>
       <p class="hint">请先上传 JD 和个人材料</p>
     </div>
@@ -9,16 +9,16 @@
     <template v-else>
       <div class="preview-toolbar">
         <button class="toolbar-btn" @click="exportHtml" title="导出 HTML">
-          ⬇️ 导出 HTML
+          导出 HTML
         </button>
         <button class="toolbar-btn" @click="exportJson" title="导出 JSON">
-          📦 导出 JSON
+          导出 JSON
         </button>
         <button class="toolbar-btn" @click="exportMarkdown" title="导出 Markdown">
-          📝 导出 MD
+          导出 MD
         </button>
         <button class="toolbar-btn" @click="refreshPreview" title="刷新预览">
-          🔄 刷新
+          刷新
         </button>
       </div>
       <div class="preview-frame-wrapper">
@@ -96,15 +96,41 @@ function downloadBlob(blob, filename, type) {
   display: flex;
   flex-direction: column;
   height: 100%;
+  animation: panelFadeIn 0.24s ease both;
 }
 .empty-state {
   text-align: center;
   padding: 80px 20px;
   color: var(--text-secondary);
 }
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.empty-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.empty-mark::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  width: 16px;
+  height: 22px;
+  border: 2px solid var(--primary);
+  border-radius: 3px;
+}
+.empty-mark::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 17px;
+  width: 8px;
+  height: 2px;
+  background: var(--primary);
+  box-shadow: 0 5px 0 var(--primary);
 }
 .hint {
   font-size: 13px;
@@ -120,14 +146,20 @@ function downloadBlob(blob, filename, type) {
 }
 .toolbar-btn {
   padding: 6px 14px;
-  background: var(--bg);
-  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   font-size: 13px;
-  color: var(--text);
-  transition: all var(--transition);
+  color: var(--primary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 .toolbar-btn:hover {
-  background: var(--border);
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .preview-frame-wrapper {
@@ -137,6 +169,7 @@ function downloadBlob(blob, filename, type) {
   overflow: hidden;
   background: #fff;
   min-height: 600px;
+  box-shadow: var(--shadow);
 }
 .preview-frame {
   width: 100%;

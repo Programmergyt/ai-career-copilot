@@ -1,7 +1,7 @@
 <template>
   <div class="gaps-panel">
     <div v-if="!questions?.length && !gaps?.length" class="empty-state">
-      <div class="empty-icon">✅</div>
+      <div class="empty-mark" aria-hidden="true"></div>
       <p>暂无缺失信息</p>
       <p class="hint">系统会在分析后列出需要补充的信息</p>
     </div>
@@ -14,7 +14,7 @@
 
     <!-- 待追问问题 -->
     <section v-if="questions?.length">
-      <h4>❓ 待补充信息（{{ questions.length }} 项）</h4>
+      <h4>待补充信息（{{ questions.length }} 项）</h4>
       <div
         v-for="(q, i) in questions"
         :key="q.id || i"
@@ -34,7 +34,7 @@
 
     <!-- Gap 列表 -->
     <section v-if="gaps?.length" style="margin-top: 20px;">
-      <h4>📊 能力缺口（{{ gaps.length }} 项）</h4>
+      <h4>能力缺口（{{ gaps.length }} 项）</h4>
       <div
         v-for="(gap, i) in gaps"
         :key="gap.id || i"
@@ -47,7 +47,7 @@
           </span>
         </div>
         <p v-if="gap.description" class="gap-desc">{{ gap.description }}</p>
-        <p v-if="gap.suggestion" class="gap-tip">💡 {{ gap.suggestion }}</p>
+        <p v-if="gap.suggestion" class="gap-tip">{{ gap.suggestion }}</p>
       </div>
     </section>
   </div>
@@ -87,15 +87,32 @@ function downloadBlob(blob, filename, format) {
 <style scoped>
 .gaps-panel {
   max-width: 720px;
+  animation: panelFadeIn 0.24s ease both;
 }
 .empty-state {
   text-align: center;
   padding: 80px 20px;
   color: var(--text-secondary);
 }
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.empty-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.empty-mark::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 11px;
+  width: 12px;
+  height: 18px;
+  border-right: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  transform: rotate(42deg);
 }
 .hint {
   font-size: 13px;
@@ -111,14 +128,21 @@ function downloadBlob(blob, filename, format) {
 
 .toolbar-btn {
   padding: 6px 12px;
-  background: var(--bg);
-  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   font-size: 12px;
-  color: var(--text);
+  color: var(--primary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .toolbar-btn:hover {
-  background: var(--border);
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 h4 {
@@ -127,10 +151,21 @@ h4 {
 }
 
 .question-card {
-  background: var(--bg);
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+.question-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 .question-header {
   display: flex;
@@ -145,19 +180,19 @@ h4 {
 }
 .question-category {
   font-size: 11px;
-  background: #eef2ff;
+  background: var(--primary-soft);
   color: var(--primary);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 .question-priority {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
-.question-priority.high { background: #fef2f2; color: var(--danger); }
-.question-priority.medium { background: #fffbeb; color: var(--warning); }
-.question-priority.low { background: #f0fdf4; color: var(--success); }
+.question-priority.high { background: #fce8e6; color: var(--danger); }
+.question-priority.medium { background: #fff4d8; color: var(--warning); }
+.question-priority.low { background: #e6f4ea; color: var(--success); }
 .question-text {
   font-size: 14px;
   line-height: 1.6;
@@ -169,10 +204,21 @@ h4 {
 }
 
 .gap-card {
-  background: var(--bg);
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px;
   margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+.gap-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 .gap-row {
   display: flex;
@@ -185,11 +231,11 @@ h4 {
 .gap-severity {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
-.gap-severity.high, .gap-severity.critical { background: #fef2f2; color: var(--danger); }
-.gap-severity.medium { background: #fffbeb; color: var(--warning); }
-.gap-severity.low, .gap-severity.info { background: #f0fdf4; color: var(--success); }
+.gap-severity.high, .gap-severity.critical { background: #fce8e6; color: var(--danger); }
+.gap-severity.medium { background: #fff4d8; color: var(--warning); }
+.gap-severity.low, .gap-severity.info { background: #e6f4ea; color: var(--success); }
 .gap-desc {
   font-size: 13px;
   color: var(--text-secondary);

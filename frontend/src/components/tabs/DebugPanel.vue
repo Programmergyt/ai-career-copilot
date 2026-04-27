@@ -1,6 +1,6 @@
 <template>
   <div class="debug-panel">
-    <h4>🔧 调试视图</h4>
+    <h4>调试视图</h4>
 
     <div class="debug-section">
       <div class="debug-label">Session ID</div>
@@ -21,7 +21,7 @@
       <div class="debug-label-row">
         <span>resume_content_json</span>
         <button v-if="resumeContent" class="copy-btn" @click="copyJson(resumeContent)">
-          📋 复制
+          复制
         </button>
       </div>
       <pre v-if="resumeContent" class="json-block">{{ formatJson(resumeContent) }}</pre>
@@ -32,7 +32,7 @@
       <div class="debug-label-row">
         <span>render_config</span>
         <button v-if="renderConfig" class="copy-btn" @click="copyJson(renderConfig)">
-          📋 复制
+          复制
         </button>
       </div>
       <pre v-if="renderConfig" class="json-block">{{ formatJson(renderConfig) }}</pre>
@@ -65,6 +65,7 @@ function copyJson(obj) {
 <style scoped>
 .debug-panel {
   max-width: 800px;
+  animation: panelFadeIn 0.24s ease both;
 }
 
 h4 {
@@ -73,6 +74,11 @@ h4 {
 
 .debug-section {
   margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
 }
 .debug-label {
   font-size: 12px;
@@ -92,9 +98,10 @@ h4 {
 .debug-value {
   font-size: 13px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border);
   padding: 6px 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   display: block;
 }
 
@@ -106,10 +113,10 @@ h4 {
 }
 .agent-tag {
   font-size: 12px;
-  background: #eef2ff;
+  background: var(--primary-soft);
   color: var(--primary);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 .arrow {
   color: var(--text-light);
@@ -117,8 +124,9 @@ h4 {
 }
 
 .json-block {
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: #f7faff;
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 14px;
   border-radius: var(--radius);
   font-size: 12px;
@@ -132,13 +140,19 @@ h4 {
 
 .copy-btn {
   font-size: 12px;
-  background: var(--bg);
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  transition: all var(--transition);
+  background: #fff;
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--primary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition);
 }
 .copy-btn:hover {
-  background: var(--border);
+  background: var(--primary-soft);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 </style>
