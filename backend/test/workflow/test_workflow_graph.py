@@ -3,7 +3,7 @@
 
 import pytest
 from workflow.graph import build_graph, _route_after_planner, _route_after_jd, _route_after_gap, _route_after_content, _route_after_render, _respond
-from workflow.state import CopilotState, WorkflowTraceItem
+from workflow.state import CopilotState, SectionRationale
 
 
 class TestRouting:
@@ -62,32 +62,35 @@ class TestRespondNode:
     def test_respond_with_empty_trace(self):
         state = CopilotState()
         result = _respond(state)
-        assert "已完成本轮处理" in result["reply_message"]
-        assert "没有可展示的节点记录" in result["reply_message"]
+        assert "已完成这轮处理" in result["reply_message"]
+        assert "这轮没有需要展开解释的生成决策" in result["reply_message"]
 
     def test_respond_builds_trace_reply(self):
         state = CopilotState(
             user_message="请分析岗位差距",
             current_intent="gap_analysis",
             execution_plan=["gap_agent"],
-            workflow_trace=[
-                WorkflowTraceItem(
-                    node="planner",
-                    output_summary="识别意图为 gap_analysis，执行计划为 gap_agent。",
+            section_rationales=[
+                SectionRationale(
+                    agent="planner",
+                    section="需求理解",
+                    decision="识别为 gap_analysis",
+                    reason="用户明确要求分析岗位差距。",
                 ),
-                WorkflowTraceItem(
-                    node="gap_agent",
-                    output_summary="缺失信息分析已完成，发现 1 项缺口，生成 1 个待追问问题。",
-                    artifacts={"gap_count": 1, "question_count": 1},
+                SectionRationale(
+                    agent="gap_agent",
+                    section="匹配差距",
+                    decision="发现 1 项缺口并生成 1 个待追问问题",
+                    reason="岗位要求和候选人材料之间存在尚未证明的能力点。",
+                    evidence=["RAG"],
                 ),
             ],
         )
         result = _respond(state)
-        assert "用户输入：请分析岗位差距" in result["reply_message"]
-        assert "意图识别：gap_analysis" in result["reply_message"]
-        assert "执行计划：gap_agent" in result["reply_message"]
-        assert "gap_agent [success]" in result["reply_message"]
-        assert "缺失信息分析已完成" in result["reply_message"]
+        assert "你的输入：请分析岗位差距" in result["reply_message"]
+        assert "我把它识别为：gap_analysis" in result["reply_message"]
+        assert "匹配差距" in result["reply_message"]
+        assert "发现 1 项缺口" in result["reply_message"]
 
 
 class TestBuildGraph:

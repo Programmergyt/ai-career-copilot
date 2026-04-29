@@ -6,7 +6,7 @@ from workflow.state import (
     CopilotState, Job, CandidateProfile, ProfileBasic, Material, Fact,
     ResumeContent, ResumeProfile, ResumeContentMeta, SectionItem, Education,
     RenderConfig, PageMargin, ResumeHtml, Gap, Question, InterviewQA,
-    ConversationEvent, Meta, DirtyFlags, PendingAction,
+    ConversationEvent, Meta, DirtyFlags, PendingAction, SectionRationale,
 )
 
 
@@ -24,6 +24,7 @@ class TestCopilotStateDefaults:
         assert state.conversation_events == []
         assert state.user_message == ""
         assert state.execution_plan == []
+        assert state.section_rationales == []
 
     def test_state_with_session_id(self):
         state = CopilotState(session_id="test_session_001")
@@ -176,6 +177,21 @@ class TestConversationEvent:
         assert event.intent == "upload_jd"
         assert len(event.triggered_agents) == 2
         assert event.status == "success"
+
+
+class TestSectionRationale:
+
+    def test_section_rationale_creation(self):
+        rationale = SectionRationale(
+            agent="content_agent",
+            section="简历内容",
+            decision="突出 RAG 项目",
+            reason="目标岗位强调 RAG 实战经验。",
+            evidence=["RAG"],
+        )
+        assert rationale.agent == "content_agent"
+        assert rationale.section == "简历内容"
+        assert rationale.status == "success"
 
 
 class TestMeta:

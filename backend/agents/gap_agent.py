@@ -10,7 +10,7 @@ from agents.json_contracts import GapAnalysisOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.gap_analysis import GAP_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Gap, Question
-from workflow.trace import append_trace
+from workflow.rationales import append_section_rationales
 from log import get_logger
 
 logger = get_logger("agent")
@@ -55,16 +55,17 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
         return {
             "gaps": [],
             "questions_to_ask": [],
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="gap_agent",
+                agent="gap_agent",
                 status="skipped",
-                input_summary="读取岗位和候选人画像用于缺口分析。",
-                output_summary="缺少岗位或候选人画像，暂时无法完成缺失信息分析。",
-                artifacts={
-                    "has_job": state.job is not None,
-                    "has_candidate_profile": state.candidate_profile is not None,
-                },
+                fallback_section="匹配差距",
+                fallback_decision="暂不进行缺口分析",
+                fallback_reason="缺口分析需要同时有岗位信息和候选人画像，目前至少缺少其中一类数据。",
+                fallback_evidence=[
+                    f"岗位信息：{'已提供' if state.job is not None else '缺失'}",
+                    f"候选人画像：{'已提供' if state.candidate_profile is not None else '缺失'}",
+                ],
             ),
         }
 
@@ -80,13 +81,13 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
         return {
             "gaps": [],
             "questions_to_ask": [],
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="gap_agent",
+                agent="gap_agent",
                 status="failed",
-                input_summary="读取岗位和候选人画像用于缺口分析。",
-                output_summary="缺失信息分析失败：模型输出格式异常，请重试。",
-                error=str(exc),
+                fallback_section="匹配差距",
+                fallback_decision="暂时无法完成缺口分析",
+                fallback_reason="模型返回的缺口分析结果不符合 JSON 约束，请重试。",
             ),
         }
 
@@ -98,16 +99,14 @@ async def gap_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "gaps": gaps,
         "questions_to_ask": questions,
-        "workflow_trace": append_trace(
+        "section_rationales": append_section_rationales(
             state,
-            node="gap_agent",
-            input_summary="读取岗位和候选人画像用于缺口分析。",
-            output_summary=f"缺失信息分析已完成，发现 {len(gaps)} 项缺口，生成 {len(questions)} 个待追问问题。",
-            artifacts={
-                "gap_count": len(gaps),
-                "question_count": len(questions),
-                "high_severity_gap_count": sum(1 for gap in gaps if gap.severity == "high"),
-            },
+            agent="gap_agent",
+            rationales=parsed.section_rationales,
+            fallback_section="匹配差距",
+            fallback_decision=f"识别 {len(gaps)} 项缺口并生成 {len(questions)} 个追问",
+            fallback_reason="这些缺口和追问来自岗位要求与候选人材料之间尚未充分证明的交叉点。",
+            fallback_evidence=[gap.description for gap in gaps[:3]],
         ),
     }
 

@@ -13,6 +13,7 @@ GAP_ANALYSIS_PROMPT = """你是一个能力缺口分析专家。请根据以下�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 返回格式如下：
 {{
@@ -36,6 +37,14 @@ GAP_ANALYSIS_PROMPT = """你是一个能力缺口分析专家。请根据以下�
             "priority": "high",
             "status": "pending",
             "answer_ref": ""
+        }}
+    ],
+    "section_rationales": [
+        {{
+            "section": "匹配差距",
+            "decision": "对照岗位要求和候选人事实识别能力缺口与追问问题",
+            "reason": "说明为什么这些缺口或问题会影响岗位匹配度",
+            "evidence": ["岗位要求或候选人画像中的简短依据"]
         }}
     ]
 }}

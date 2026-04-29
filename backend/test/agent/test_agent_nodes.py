@@ -99,8 +99,8 @@ def test_planner_node_builds_plan_for_upload_jd(monkeypatch, fixture_jd_text):
     assert updates["current_intent"] == "upload_jd"
     assert updates["execution_plan"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
     assert updates["triggered_agents"] == ["jd_agent", "gap_agent", "content_agent", "render_agent", "interview_agent"]
-    assert updates["workflow_trace"][-1].node == "planner"
-    assert updates["workflow_trace"][-1].artifacts["intent"] == "upload_jd"
+    assert updates["section_rationales"][-1].agent == "planner"
+    assert "upload_jd" in updates["section_rationales"][-1].decision
 
 
 def test_planner_node_skips_content_when_no_job(monkeypatch, fixture_profile_text):
@@ -158,8 +158,8 @@ def test_jd_node_parses_job_from_fixture(monkeypatch, fixture_jd_text):
     assert job.title == "AIGC工程师"
     assert "RAG" in job.tech_stack
     assert updates["meta"].dirty_flags.content_dirty is True
-    assert updates["workflow_trace"][-1].node == "jd_agent"
-    assert updates["workflow_trace"][-1].artifacts["job_title"] == "AIGC工程师"
+    assert updates["section_rationales"][-1].agent == "jd_agent"
+    assert updates["section_rationales"][-1].section == "岗位分析"
 
 
 def test_profile_node_updates_candidate_profile(monkeypatch, fixture_profile_text, fixture_project_text):
@@ -176,8 +176,8 @@ def test_profile_node_updates_candidate_profile(monkeypatch, fixture_profile_tex
     assert profile.profile_basic.name == "林知遥"
     assert len(profile.materials) == 1
     assert len(profile.facts) >= 2
-    assert updates["workflow_trace"][-1].node == "profile_agent"
-    assert updates["workflow_trace"][-1].artifacts["candidate_name"] == "林知遥"
+    assert updates["section_rationales"][-1].agent == "profile_agent"
+    assert updates["section_rationales"][-1].section == "候选人画像"
 
 
 def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
@@ -195,8 +195,8 @@ def test_gap_node_generates_gaps_and_questions(monkeypatch, fixture_jd_text):
     assert updates["gaps"]
     assert updates["questions_to_ask"]
     assert updates["questions_to_ask"][0].status == "pending"
-    assert updates["workflow_trace"][-1].node == "gap_agent"
-    assert updates["workflow_trace"][-1].artifacts["gap_count"] >= 1
+    assert updates["section_rationales"][-1].agent == "gap_agent"
+    assert updates["section_rationales"][-1].section == "匹配差距"
 
 
 def test_question_node_answers_from_state(monkeypatch):
@@ -211,9 +211,9 @@ def test_question_node_answers_from_state(monkeypatch):
     )
     updates = question_node(state)
 
-    assert updates["workflow_trace"][-1].node == "question_agent"
-    assert "AIGC工程师" in updates["workflow_trace"][-1].output_summary
-    assert "林知遥" in updates["workflow_trace"][-1].output_summary
+    assert updates["section_rationales"][-1].agent == "question_agent"
+    assert "AIGC工程师" in updates["agent_reply_message"]
+    assert "林知遥" in updates["agent_reply_message"]
 
 
 def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fixture_profile_text):
@@ -257,8 +257,8 @@ def test_interview_node_generates_interview_qa(monkeypatch, fixture_jd_text, fix
 
     assert updates["interview_qa"]
     assert updates["meta"].dirty_flags.interview_dirty is False
-    assert updates["workflow_trace"][-1].node == "interview_agent"
-    assert updates["workflow_trace"][-1].artifacts["interview_qa_count"] >= 1
+    assert updates["section_rationales"][-1].agent == "interview_agent"
+    assert updates["section_rationales"][-1].section == "面试准备"
 
 
 def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fixture_profile_text):
@@ -280,11 +280,11 @@ def test_content_and_render_nodes_generate_html(monkeypatch, fixture_jd_text, fi
     render_updates = render_node(state)
 
     assert content_updates["resume_content_json"].meta.version >= 1
-    assert content_updates["workflow_trace"][-1].node == "content_agent"
+    assert content_updates["section_rationales"][-1].agent == "content_agent"
     assert render_updates["render_config"].layout_mode == "double-column"
     assert "<html" in render_updates["resume_html"].html.lower()
     assert render_updates["meta"].dirty_flags.render_dirty is False
-    assert render_updates["workflow_trace"][-1].node == "render_agent"
+    assert render_updates["section_rationales"][-1].agent == "render_agent"
 
 
 def test_interview_node_retries_once_after_invalid_json(monkeypatch, fixture_jd_text):
@@ -310,7 +310,7 @@ def test_interview_node_retries_once_after_invalid_json(monkeypatch, fixture_jd_
 
     assert llm.calls == 2
     assert len(updates["interview_qa"]) == 1
-    assert updates["workflow_trace"][-1].output_summary.startswith("面试问答已生成")
+    assert updates["section_rationales"][-1].decision.startswith("生成 1 条面试问答")
 
 
 def test_interview_node_reports_failure_after_retry_exhausted(monkeypatch, fixture_jd_text):
@@ -335,6 +335,6 @@ def test_interview_node_reports_failure_after_retry_exhausted(monkeypatch, fixtu
     updates = interview_node(state)
 
     assert updates["interview_qa"] == []
-    assert updates["workflow_trace"][-1].output_summary == "面试问答生成失败：模型输出格式异常，请重试。"
-    assert updates["workflow_trace"][-1].status == "failed"
+    assert updates["section_rationales"][-1].reason == "模型返回的面试问答不符合 JSON 约束，请重试。"
+    assert updates["section_rationales"][-1].status == "failed"
     assert "meta" not in updates

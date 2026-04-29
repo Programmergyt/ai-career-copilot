@@ -20,7 +20,8 @@
   "conversation_events": "ConversationEvent[]",
   "meta": "Meta",
   "pending_actions": "PendingAction[]",
-  "workflow_trace": "WorkflowTraceItem[] (runtime only)"
+  "agent_reply_message": "string (runtime only)",
+  "section_rationales": "SectionRationale[] (runtime only)"
 }
 ```
 
@@ -271,19 +272,30 @@
 
 ---
 
-## `WorkflowTraceItem`（运行时字段）
+## `agent_reply_message`（运行时字段）
 
-`workflow_trace` 记录当前 graph 运行内从用户输入到最终输出的过程，用于 Respond 节点稳定拼装 `reply_message`。该字段暂不写入 Redis 或 MySQL。
+`agent_reply_message` 记录 Question Agent 生成的直接问答结果，用于 Respond 节点在 `ask_question` 场景中拼装最终 `reply_message`。该字段暂不写入 Redis 或 MySQL。
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| node | string | 是 | planner / jd_agent / profile_agent / gap_agent / content_agent / render_agent / interview_agent / question_agent / export |
+| agent_reply_message | string | 否 | Question Agent 生成的直接回答 |
+
+写入者：Question Agent；消费方：Respond 节点
+
+---
+
+## `SectionRationale`（运行时字段）
+
+`section_rationales` 记录当前 graph 运行中各 Agent 输出的用户可见决策依据，用于 Respond 节点稳定拼装 Markdown 格式的 `reply_message`。该字段来自各 Agent 的 JSON Schema 输出，暂不写入 Redis 或 MySQL。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| agent | string | 是 | planner / jd_agent / profile_agent / gap_agent / content_agent / render_agent / interview_agent / question_agent / export |
+| section | string | 是 | 面向用户展示的处理主题，如需求理解、岗位分析、简历内容、面试准备 |
+| decision | string | 是 | Agent 本轮做出的简要处理决策 |
+| reason | string | 是 | 面向用户的简要理由，不包含内部逐步推理 |
+| evidence | string[] | 否 | 支撑该理由的简短依据，如 JD 关键词、候选人事实、用户指令 |
 | status | string | 是 | success / skipped / failed |
-| input_summary | string | 否 | 节点输入摘要 |
-| output_summary | string | 是 | 节点产物或错误摘要 |
-| artifacts | object | 否 | 结构化产物摘要，如 job_title、gap_count、resume_content_version |
-| error | string | 否 | 失败错误信息 |
-| created_at | string (ISO 8601) | 是 | 创建时间 |
 
 写入者：Planner Agent 和各业务 Agent；消费方：Respond 节点
 
@@ -333,6 +345,6 @@
 1. `resume_content_json` 是简历事实的唯一真值来源
 2. `resume_html` 只能由 `resume_content_json + render_config` 派生，禁止回写事实层
 3. 所有 section item 必须有稳定 `id`
-4. `workflow_trace` 可回放本轮运行路径，但暂不持久化
+4. `section_rationales` 只记录用户可见的简要决策依据，不承担调试链路日志职责
 5. `content_dirty=true` 时，`resume_html` 和 `interview_qa` 视为过期
 6. `render_dirty=true` 时，只重新生成 `resume_html`，不重跑内容链路

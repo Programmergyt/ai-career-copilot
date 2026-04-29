@@ -80,7 +80,7 @@ Planner Agent
        ↓
      Interview Agent → state.interview_qa
        ↓
-  Planner/Agents → state.workflow_trace（运行时，不持久化）
+  Planner/Agents → state.section_rationales（运行时，不持久化）
        ↓
   Respond 节点 → state.reply_message
   ↓
@@ -275,7 +275,7 @@ CREATE TABLE conversation_events (
 }
 ```
 
-`reply_message` 由 workflow 的 Respond 节点统一生成。Respond 读取本轮运行时 `workflow_trace`，用稳定 Markdown 模板输出用户输入、意图识别、执行计划、节点产物和最终结果；`workflow_trace` 暂不持久化到 Redis/MySQL。
+`reply_message` 由 workflow 的 Respond 节点统一生成。Respond 读取本轮运行时 `section_rationales`，用稳定 Markdown 模板输出用户输入、意图识别、各 Agent 的用户可见决策依据和最终结果；`section_rationales` 暂不持久化到 Redis/MySQL。
 
 ### `POST /api/resume/render`
 

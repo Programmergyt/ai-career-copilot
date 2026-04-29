@@ -15,9 +15,9 @@ Planner Agent: State Diff Planner → 生成 execution_plan
   ↓
 Planner Agent: Execution Orchestrator → 按 plan 顺序调度 Agent
   ↓
-状态更新 + 追加本轮 workflow_trace（运行时记录，不持久化）
+状态更新 + 追加本轮 section_rationales（运行时记录，不持久化）
   ↓
-Respond 节点基于 workflow_trace 生成 reply_message
+Respond 节点基于 section_rationales 生成 Markdown 格式 reply_message
   ↓
 返回结果给前端
 ```
@@ -98,12 +98,12 @@ Respond 节点基于 workflow_trace 生成 reply_message
 
 | 失败点 | 回退策略 |
 |--------|----------|
-| JD Agent 解析失败 | 不修改状态，记录 workflow_trace(status=failed)，由 Respond 输出过程记录 |
-| Profile Agent 解析失败 | 保留已有 candidate_profile，记录 workflow_trace(status=failed) |
+| JD Agent 解析失败 | 不修改状态，记录 section_rationales(status=failed)，由 Respond 输出失败说明 |
+| Profile Agent 解析失败 | 保留已有 candidate_profile，记录 section_rationales(status=failed) |
 | Resume Content Agent 失败 | 保留上一版 resume_content_json |
 | Resume Render Agent 失败 | 回退默认模板重试一次，仍失败则保留上一版 resume_html |
 | Interview Agent 失败 | 保留上一版 interview_qa，标记 interview_dirty=true |
-| 任何 Agent 超时 | 记录 workflow_trace(status=failed)，由 Respond 输出失败节点和错误提示 |
+| 任何 Agent 超时 | 记录 section_rationales(status=failed)，由 Respond 输出失败说明 |
 
 ---
 
@@ -111,8 +111,9 @@ Respond 节点基于 workflow_trace 生成 reply_message
 
 1. Agent 按链路顺序串行执行，不并行
 2. 每个 Agent 执行完毕后立即写入状态并更新 dirty_flags
-3. 每轮用户输入的节点执行过程写入运行时 `workflow_trace`，暂不持久化
+3. 每轮用户输入的用户可见决策依据写入运行时 `section_rationales`，暂不持久化
 4. Planner Agent 记录本轮 `current_intent`、`execution_plan` 和 `triggered_agents`
 5. 渲染指令不触发内容链路
 6. 内容指令执行后自动触发渲染链路
-7. 所有 intent 的最终 `reply_message` 都由 Respond 节点基于 `workflow_trace` 稳定拼装，包含用户输入、意图识别、执行计划、节点产物和最终结果
+7. 所有 intent 的最终 `reply_message` 都由 Respond 节点基于 `section_rationales` 稳定拼装，包含用户输入、意图识别、各 Agent 的决策依据和最终结果
+8. `section_rationales` 不输出模型内部逐步推理，只输出面向用户的简要理由和依据

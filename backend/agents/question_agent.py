@@ -6,9 +6,10 @@ import asyncio
 import json
 from typing import Any
 
-from models.llm import get_llm, _ainvoke_model, _extract_text_content
+from agents.json_contracts import QuestionAnswerOutput
+from models.llm import get_llm, ainvoke_json_with_schema
 from workflow.state import CopilotState
-from workflow.trace import append_trace, summarize_user_message
+from workflow.rationales import append_section_rationales, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -21,6 +22,22 @@ _QUESTION_SYSTEM_PROMPT = """你是一个职业助手问答专家。你可以读
 - 如果信息不足，明确说明缺少哪些状态数据，并给出用户下一步可以补充什么
 - 用户询问岗位、候选人、简历、缺口、追问问题、渲染配置、HTML 版本或面试问答时，都可以从状态变量中综合回答
 - 回答要直接、自然，使用中文
+- 返回且仅返回一个合法 JSON 对象
+- 不要输出 Markdown、代码块、注释或额外说明
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
+
+返回格式如下：
+{
+  "answer": "给用户的直接回答",
+  "section_rationales": [
+    {
+      "section": "问答",
+      "decision": "说明本次回答主要依据了哪些状态信息",
+      "reason": "解释为什么这些状态信息足以回答或为什么仍然信息不足",
+      "evidence": ["当前状态中的简短依据"]
+    }
+  ]
+}
 """
 
 
@@ -32,8 +49,9 @@ def _compact_state_context(state: CopilotState) -> dict[str, Any]:
             "execution_plan",
             "triggered_agents",
             "reply_message",
+            "agent_reply_message",
             "conversation_events",
-            "workflow_trace",
+            "section_rationales",
         }
     )
     resume_html = state_context.get("resume_html") or {}
@@ -58,19 +76,39 @@ async def question_node_async(state: CopilotState) -> dict[str, Any]:
         f"{state_json}"
     )
     llm = get_llm()
-    response = await _ainvoke_model(llm, prompt)
-    answer = _extract_text_content(response)
+    try:
+        parsed = await ainvoke_json_with_schema(llm, prompt, QuestionAnswerOutput, logger, "Question Agent")
+    except RuntimeError as exc:
+        logger.error("Question Agent failed: %s", exc)
+        answer = "我暂时无法稳定解析当前问题的回答，请稍后重试或换一种问法。"
+        return {
+            "agent_reply_message": answer,
+            "section_rationales": append_section_rationales(
+                state,
+                agent="question_agent",
+                status="failed",
+                fallback_section="问答",
+                fallback_decision="暂时无法回答用户问题",
+                fallback_reason="模型返回的问答结果不符合 JSON 约束，请重试。",
+                fallback_evidence=[summarize_user_message(state.user_message)],
+            )
+        }
+
+    answer = parsed.answer
 
     if not answer:
         answer = "我暂时没有从当前状态中找到可回答的信息。可以补充岗位、个人材料或先生成简历后再问我。"
 
     return {
-        "workflow_trace": append_trace(
+        "agent_reply_message": answer,
+        "section_rationales": append_section_rationales(
             state,
-            node="question_agent",
-            input_summary=f"根据当前 graph state 回答问题：{summarize_user_message(state.user_message)}",
-            output_summary=answer,
-            artifacts={"answer_length": len(answer)},
+            agent="question_agent",
+            rationales=parsed.section_rationales,
+            fallback_section="问答",
+            fallback_decision="基于当前会话状态回答用户问题",
+            fallback_reason="回答优先引用已保存的岗位、候选人、简历、缺口和面试问答数据，避免编造状态外信息。",
+            fallback_evidence=[summarize_user_message(state.user_message)],
         )
     }
 

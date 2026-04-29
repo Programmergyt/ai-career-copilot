@@ -5,9 +5,17 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class SectionRationaleOutput(BaseModel):
+    section: str = ""
+    decision: str = ""
+    reason: str = ""
+    evidence: list[str] = Field(default_factory=list)
+
+
 class IntentClassificationOutput(BaseModel):
     intent: str = "ask_question"
     reason: str = ""
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class JDAnalysisOutput(BaseModel):
@@ -22,6 +30,7 @@ class JDAnalysisOutput(BaseModel):
     experience_requirement: str = ""
     implicit_preferences: list[str] = Field(default_factory=list)
     bonus_items: list[str] = Field(default_factory=list)
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class ProfileBasicOutput(BaseModel):
@@ -43,6 +52,7 @@ class ProfileFactOutput(BaseModel):
 class ProfileExtractionOutput(BaseModel):
     profile_basic: ProfileBasicOutput = Field(default_factory=ProfileBasicOutput)
     facts: list[ProfileFactOutput] = Field(default_factory=list)
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class GapOutput(BaseModel):
@@ -68,6 +78,7 @@ class QuestionOutput(BaseModel):
 class GapAnalysisOutput(BaseModel):
     gaps: list[GapOutput] = Field(default_factory=list)
     questions_to_ask: list[QuestionOutput] = Field(default_factory=list)
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class EducationOutput(BaseModel):
@@ -104,6 +115,7 @@ class ResumeGenerationOutput(BaseModel):
     projects: list[ResumeSectionItemOutput] = Field(default_factory=list)
     awards: list[ResumeSectionItemOutput] = Field(default_factory=list)
     papers: list[ResumeSectionItemOutput] = Field(default_factory=list)
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class PageMarginOutput(BaseModel):
@@ -127,6 +139,7 @@ class RenderInstructionOutput(BaseModel):
     layout_mode: str = "single-column"
     spacing_scale: str = "standard"
     last_render_reason: str = ""
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
 
 
 class InterviewQAOutput(BaseModel):
@@ -140,3 +153,9 @@ class InterviewQAOutput(BaseModel):
 
 class InterviewGenerationOutput(BaseModel):
     interview_qa: list[InterviewQAOutput] = Field(default_factory=list)
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)
+
+
+class QuestionAnswerOutput(BaseModel):
+    answer: str = ""
+    section_rationales: list[SectionRationaleOutput] = Field(default_factory=list)

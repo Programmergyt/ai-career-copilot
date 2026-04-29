@@ -42,6 +42,14 @@ class PromptRouterLLM:
             return _FakeResponse(json.dumps({
                 "intent": self.intent,
                 "reason": f"mocked intent={self.intent}",
+                "section_rationales": [
+                    {
+                        "section": "需求理解",
+                        "decision": f"识别为 {self.intent}",
+                        "reason": "测试桩根据预设 intent 返回处理路径。",
+                        "evidence": ["mocked intent"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "岗位需求分析专家" in text:
@@ -57,6 +65,14 @@ class PromptRouterLLM:
                 "experience_requirement": "有 AI 项目经历",
                 "implicit_preferences": ["快速原型能力"],
                 "bonus_items": ["Agentic Workflow"],
+                "section_rationales": [
+                    {
+                        "section": "岗位分析",
+                        "decision": "提取 AIGC 工程师的核心要求",
+                        "reason": "RAG、LangChain 和企业级 GenAI 应用会影响后续简历匹配。",
+                        "evidence": ["RAG", "LangChain", "GenAI"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "候选人画像构建专家" in text:
@@ -83,6 +99,14 @@ class PromptRouterLLM:
                         "source_refs": ["material_mock"],
                         "updated_at": "",
                     },
+                ],
+                "section_rationales": [
+                    {
+                        "section": "候选人画像",
+                        "decision": "沉淀候选人的技能和项目事实",
+                        "reason": "这些事实会支撑后续简历生成和缺口分析。",
+                        "evidence": ["Python + LangChain + RAG", "AI Career Copilot"],
+                    }
                 ],
             }, ensure_ascii=False))
 
@@ -143,6 +167,14 @@ class PromptRouterLLM:
                     }
                 ],
                 "papers": [],
+                "section_rationales": [
+                    {
+                        "section": "简历内容",
+                        "decision": "突出 AIGC 与 RAG 相关经历",
+                        "reason": "这些经历最贴近目标岗位的技术栈和职责要求。",
+                        "evidence": ["RAG", "多 Agent 简历系统"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "渲染配置专家" in text:
@@ -160,6 +192,14 @@ class PromptRouterLLM:
                 "layout_mode": "double-column",
                 "spacing_scale": "standard",
                 "last_render_reason": "按用户要求调整为双栏布局",
+                "section_rationales": [
+                    {
+                        "section": "视觉呈现",
+                        "decision": "调整为双栏布局",
+                        "reason": "用户明确要求改成双栏布局。",
+                        "evidence": ["改成双栏布局"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "能力缺口分析专家" in text:
@@ -185,7 +225,15 @@ class PromptRouterLLM:
                         "status": "pending",
                         "answer_ref": "",
                     }
-                ]
+                ],
+                "section_rationales": [
+                    {
+                        "section": "匹配差距",
+                        "decision": "将 RAG 实战经验列为高优先级缺口",
+                        "reason": "目标岗位强调 RAG，而候选人画像还需要更具体的项目细节。",
+                        "evidence": ["RAG", "项目经验"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "面试准备专家" in text:
@@ -215,11 +263,29 @@ class PromptRouterLLM:
                         "source_refs": [],
                         "version": 1,
                     }
-                ]
+                ],
+                "section_rationales": [
+                    {
+                        "section": "面试准备",
+                        "decision": "围绕 RAG 技术和项目深挖生成问题",
+                        "reason": "这些问题覆盖岗位技术要求和简历中最可能被追问的项目经历。",
+                        "evidence": ["RAG 项目", "技术架构"],
+                    }
+                ],
             }, ensure_ascii=False))
 
         if "职业助手问答专家" in text or "当前 graph state JSON" in text:
-            return _FakeResponse("当前状态显示目标岗位是 AIGC工程师，候选人是林知遥。")
+            return _FakeResponse(json.dumps({
+                "answer": "当前状态显示目标岗位是 AIGC工程师，候选人是林知遥。",
+                "section_rationales": [
+                    {
+                        "section": "问答",
+                        "decision": "依据当前状态回答目标岗位和候选人",
+                        "reason": "状态中已经保存了 job.title 和 candidate_profile.profile_basic.name。",
+                        "evidence": ["AIGC工程师", "林知遥"],
+                    }
+                ],
+            }, ensure_ascii=False))
 
         return _FakeResponse(json.dumps({"intent": "ask_question", "reason": "fallback"}, ensure_ascii=False))
 

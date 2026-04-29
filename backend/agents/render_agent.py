@@ -12,13 +12,13 @@ from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.render_instruction import RENDER_INSTRUCTION_PROMPT
 from tools.template_renderer import render_resume_html
 from workflow.state import CopilotState, RenderConfig, ResumeHtml, PageMargin
-from workflow.trace import append_trace, summarize_user_message
+from workflow.rationales import append_section_rationales, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
 
 
-async def _update_render_config_from_llm_async(state: CopilotState) -> RenderConfig:
+async def _update_render_config_from_llm_async(state: CopilotState) -> tuple[RenderConfig, Any]:
     """异步解析渲染指令并更新配置。"""
     prompt = RENDER_INSTRUCTION_PROMPT.format(
         current_render_config=state.render_config.model_dump_json(indent=2),
@@ -49,7 +49,7 @@ async def _update_render_config_from_llm_async(state: CopilotState) -> RenderCon
         version=state.render_config.version + 1,
         last_render_reason=parsed.last_render_reason or state.user_message,
     )
-    return new_config
+    return new_config, parsed
 
 
 async def render_node_async(state: CopilotState) -> dict[str, Any]:
@@ -60,19 +60,21 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
     render_config = state.render_config
 
     # 渲染指令 → 先更新 render_config
+    render_parsed = None
     if intent == "render_edit":
         try:
-            render_config = await _update_render_config_from_llm_async(state)
+            render_config, render_parsed = await _update_render_config_from_llm_async(state)
         except RuntimeError as exc:
             logger.error("Resume Render Agent failed: %s", exc)
             return {
-                "workflow_trace": append_trace(
+                "section_rationales": append_section_rationales(
                     state,
-                    node="render_agent",
+                    agent="render_agent",
                     status="failed",
-                    input_summary=f"解析渲染指令：{summarize_user_message(state.user_message)}",
-                    output_summary="渲染配置解析失败：模型输出格式异常，请重试。",
-                    error=str(exc),
+                    fallback_section="视觉呈现",
+                    fallback_decision="暂时无法解析渲染指令",
+                    fallback_reason="模型返回的渲染配置不符合 JSON 约束，请重试或换一种样式描述。",
+                    fallback_evidence=[summarize_user_message(state.user_message)],
                 ),
             }
         logger.info("Render config updated to v%d", render_config.version)
@@ -88,13 +90,14 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
     if resume_content is None:
         return {
             "render_config": render_config,
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="render_agent",
+                agent="render_agent",
                 status="skipped",
-                input_summary=f"准备渲染简历：{summarize_user_message(state.user_message)}",
-                output_summary="暂无简历内容，无法渲染。",
-                artifacts={"render_config_version": render_config.version},
+                fallback_section="视觉呈现",
+                fallback_decision="暂不渲染简历",
+                fallback_reason="渲染需要先有简历内容，目前还没有可生成 HTML 的内容。",
+                fallback_evidence=[summarize_user_message(state.user_message)],
             ),
         }
 
@@ -129,19 +132,17 @@ async def render_node_async(state: CopilotState) -> dict[str, Any]:
         "render_config": render_config,
         "resume_html": resume_html,
         "meta": meta,
-        "workflow_trace": append_trace(
+        "section_rationales": append_section_rationales(
             state,
-            node="render_agent",
-            input_summary=f"生成简历 HTML：{summarize_user_message(state.user_message)}",
-            output_summary=msg,
-            artifacts={
-                "render_config_version": render_config.version,
-                "resume_html_version": resume_html.version,
-                "derived_from_content_version": resume_html.derived_from_content_version,
-                "layout_mode": render_config.layout_mode,
-                "template_id": render_config.template_id,
-                "checksum": resume_html.checksum,
-            },
+            agent="render_agent",
+            rationales=render_parsed.section_rationales if render_parsed else [],
+            fallback_section="视觉呈现",
+            fallback_decision=msg,
+            fallback_reason="渲染配置会把已生成的简历内容转换为可预览的 HTML，并尽量保持版式与用户要求一致。",
+            fallback_evidence=[
+                f"layout_mode={render_config.layout_mode}",
+                f"template_id={render_config.template_id}",
+            ],
         ),
     }
 

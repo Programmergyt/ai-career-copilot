@@ -97,7 +97,8 @@ AI Job Copilot
   "conversation_events": [],
   "meta": {},
   "pending_actions": [],
-  "workflow_trace": []
+  "agent_reply_message": "",
+  "section_rationales": []
 }
 ```
 
@@ -311,19 +312,26 @@ AI Job Copilot
 | created_at | string | 创建时间 |
 | status | string | success / failed / partial |
 
-### `workflow_trace`（运行时）
+### `agent_reply_message`（运行时）
 
-本轮 graph 执行过程记录，暂不持久化，由 Planner 和各 Agent 追加，Respond 节点读取后生成最终 `reply_message`。
+Question Agent 生成的直接回答，暂不持久化。Respond 节点在 `ask_question` 场景中读取该字段并拼装最终 `reply_message`。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| node | string | 执行节点 |
+| agent_reply_message | string | Question Agent 给用户的直接回答 |
+
+### `section_rationales`（运行时）
+
+本轮 graph 中各 Agent 输出的用户可见决策依据，暂不持久化，由 Planner 和各业务 Agent 追加，Respond 节点读取后生成最终 `reply_message`。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| agent | string | 输出该依据的 Agent |
+| section | string | 面向用户展示的处理主题 |
+| decision | string | 本轮处理决策 |
+| reason | string | 面向用户的简要理由，不包含内部逐步推理 |
+| evidence | string[] | 支撑该理由的简短依据 |
 | status | string | success / skipped / failed |
-| input_summary | string | 输入摘要 |
-| output_summary | string | 节点产物或错误摘要 |
-| artifacts | object | 结构化产物摘要 |
-| error | string | 错误信息 |
-| created_at | string | 创建时间 |
 
 ### `meta`
 
@@ -367,7 +375,7 @@ AI Job Copilot
 1. `resume_content_json` 是简历事实的唯一真值来源
 2. `resume_html` 只能由 `resume_content_json + render_config` 派生，不可回写事实层
 3. 任何 section 级内容必须有稳定 `id`
-4. `workflow_trace` 必须可回放本轮状态变化路径，但暂不持久化
+4. `section_rationales` 必须能解释本轮关键生成决策，但不承担调试链路日志职责
 5. `content_dirty=true` 时，`resume_html` 和 `interview_qa` 视为过期
 6. `render_dirty=true` 时，只重新生成 `resume_html`，不重跑内容链路
 
@@ -387,7 +395,7 @@ AI Job Copilot
 | Resume Render Agent | 生成/更新 `render_config` 和 `resume_html` |
 | Interview Agent | 生成 `interview_qa` |
 | Question Agent | 基于当前 graph state 回答自由问题 |
-| Respond 节点 | 基于本轮 workflow_trace 拼装最终 reply_message |
+| Respond 节点 | 基于本轮 section_rationales 拼装最终 reply_message |
 
 ## 5.2 Planner Agent
 
@@ -406,7 +414,7 @@ AI Job Copilot
 
 **State Diff Planner** — 判断本轮输入影响哪些状态字段，输出最小执行计划。
 
-**Execution Orchestrator** — 顺序调度 Agent，记录本轮 `workflow_trace`，管理失败回退。
+**Execution Orchestrator** — 顺序调度 Agent，记录本轮 `section_rationales`，管理失败回退。
 
 ## 5.3 JD Agent
 
@@ -460,13 +468,14 @@ AI Job Copilot
 
 - 读取当前 graph state 与用户问题
 - 基于已有岗位、候选人画像、简历内容、缺口、渲染配置和面试问答回答
-- 不修改业务状态，只把回答写入本轮 `workflow_trace`
+- 不修改业务状态，只把直接回答写入本轮 `agent_reply_message`
+- 输出 `section_rationales`，说明本次回答依据了哪些状态字段
 
 ## 5.10 Respond 节点
 
-- 读取用户输入、意图识别结果、执行计划和所有节点产物摘要
+- 读取用户输入、意图识别结果、执行计划、`agent_reply_message` 和 `section_rationales`
 - 使用稳定 Markdown 模板生成最终 `reply_message`
-- 所有 intent，包括 `ask_question`，都统一输出“用户输入 → 意图识别 → 执行计划 → 节点产物 → 最终结果”的过程记录
+- 所有 intent，包括 `ask_question`，都统一输出“用户输入 → 意图识别 → 决策依据 → 最终结果”的自然语言记录
 - 暂不使用 LLM 润色，避免额外成本和不稳定输出
 
 ## 5.11 Agent 边界约束
@@ -479,8 +488,8 @@ AI Job Copilot
 | Resume Content Agent | resume_content_json | render_config, resume_html, job, candidate_profile |
 | Resume Render Agent | render_config, resume_html | resume_content_json, job, candidate_profile |
 | Interview Agent | interview_qa | 其他所有字段（只读 job, candidate_profile, resume_content_json）|
-| Question Agent | workflow_trace | 业务数据字段 |
-| Planner Agent | meta, pending_actions, workflow_trace | 业务数据字段 |
+| Question Agent | agent_reply_message, section_rationales | 业务数据字段 |
+| Planner Agent | meta, pending_actions, section_rationales | 业务数据字段 |
 | Respond 节点 | reply_message | 业务数据字段 |
 
 ---

@@ -15,6 +15,7 @@ RESUME_GENERATION_PROMPT = """你是一个专业的简历内容生成专家。�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 返回格式如下：
 {{
@@ -72,7 +73,15 @@ RESUME_GENERATION_PROMPT = """你是一个专业的简历内容生成专家。�
             "updated_at": ""
         }}
     ],
-    "papers": []
+    "papers": [],
+    "section_rationales": [
+        {{
+            "section": "简历内容",
+            "decision": "说明项目、实习、技能或总结的排序和呈现策略",
+            "reason": "解释为什么这样更贴合目标岗位，以及为什么这样呈现候选人的经历",
+            "evidence": ["JD 关键词或候选人经历中的简短依据"]
+        }}
+    ]
 }}
 
 注意：
@@ -99,6 +108,7 @@ RESUME_SECTION_UPDATE_PROMPT = """你是简历内容编辑专家。请根据用�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 请返回完整的简历内容 JSON（与原格式一致），只修改受影响的 section。
 

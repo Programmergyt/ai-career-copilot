@@ -13,6 +13,7 @@ RENDER_INSTRUCTION_PROMPT = """你是简历渲染配置专家。请根据用户�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 返回更新后的完整渲染配置 JSON：
 {{
@@ -28,7 +29,15 @@ RENDER_INSTRUCTION_PROMPT = """你是简历渲染配置专家。请根据用户�
     "visibility_map": {{}},
     "layout_mode": "single-column / double-column",
     "spacing_scale": "compact / standard / relaxed",
-    "last_render_reason": "本次渲染变更的简要说明"
+    "last_render_reason": "本次渲染变更的简要说明",
+    "section_rationales": [
+        {{
+            "section": "视觉呈现",
+            "decision": "说明本次版式、字号、间距或可见性的调整",
+            "reason": "解释为什么这样调整更符合用户指令或简历阅读场景",
+            "evidence": ["用户渲染指令或当前配置中的简短依据"]
+        }}
+    ]
 }}
 
 注意：

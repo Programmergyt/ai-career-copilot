@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from agents.json_contracts import IntentClassificationOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.intent_classification import INTENT_CLASSIFICATION_PROMPT
 from workflow.state import CopilotState
-from workflow.trace import append_trace, summarize_user_message
+from workflow.rationales import append_section_rationales, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -68,13 +66,14 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
             "current_intent": "ask_question",
             "execution_plan": [],
             "triggered_agents": [],
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="planner",
+                agent="planner",
                 status="failed",
-                input_summary=f"用户输入：{summarize_user_message(state.user_message)}",
-                output_summary="意图识别失败：模型输出格式异常，请稍后重试。",
-                error=str(exc),
+                fallback_section="需求理解",
+                fallback_decision="暂时无法稳定识别用户意图",
+                fallback_reason="模型返回的意图分类结果不符合 JSON 约束，请稍后重试或换一种表达。",
+                fallback_evidence=[summarize_user_message(state.user_message)],
             ),
         }
 
@@ -91,29 +90,27 @@ async def planner_node_async(state: CopilotState) -> dict[str, Any]:
         "current_intent": intent,
         "execution_plan": plan,
         "triggered_agents": list(plan),
-        "workflow_trace": append_trace(
+        "section_rationales": append_section_rationales(
             state,
-            node="planner",
-            input_summary=f"用户输入：{summarize_user_message(state.user_message)}",
-            output_summary=f"识别意图为 {intent}，执行计划为 {' -> '.join(plan) if plan else '无后续 Agent'}。",
-            artifacts={
-                "intent": intent,
-                "reason": intent_result.reason,
-                "execution_plan": plan,
-            },
+            agent="planner",
+            rationales=intent_result.section_rationales,
+            fallback_section="需求理解",
+            fallback_decision=f"识别为 {intent} 并安排 {' -> '.join(plan) if plan else '直接回复'}",
+            fallback_reason=intent_result.reason or "根据用户消息和当前会话状态选择最合适的处理路径。",
+            fallback_evidence=[summarize_user_message(state.user_message)],
         ),
     }
 
     # 无需执行 Agent 的意图直接回复
     if not plan:
         if intent == "export":
-            updates["workflow_trace"] = append_trace(
-                state.model_copy(update={"workflow_trace": updates["workflow_trace"]}),
-                node="export",
+            updates["section_rationales"] = append_section_rationales(
+                state.model_copy(update={"section_rationales": updates["section_rationales"]}),
+                agent="export",
                 status="skipped",
-                input_summary="用户请求导出。",
-                output_summary="导出功能将在后续版本中支持。",
-                artifacts={"supported": False},
+                fallback_section="导出",
+                fallback_decision="暂不执行导出",
+                fallback_reason="当前导出能力还未接入主对话流程，因此只保留用户请求并给出说明。",
             )
 
     updates["meta"] = state.meta.model_copy(update={

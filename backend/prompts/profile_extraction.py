@@ -13,6 +13,7 @@ PROFILE_EXTRACTION_PROMPT = """你是一个候选人画像构建专家。请从�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 返回格式如下，并将信息合并到已有画像中（增量更新，不覆盖已有数据）：
 {{
@@ -30,6 +31,14 @@ PROFILE_EXTRACTION_PROMPT = """你是一个候选人画像构建专家。请从�
             "content": "结构化描述内容（JSON 格式的字符串，包含关键细节）",
             "source_refs": ["material_<id>"],
             "updated_at": ""
+        }}
+    ],
+    "section_rationales": [
+        {{
+            "section": "候选人画像",
+            "decision": "将用户材料整理为基本信息和可复用事实",
+            "reason": "说明这些事实会如何支撑后续简历生成、缺口分析或面试问答",
+            "evidence": ["用户材料中的项目、技能或经历关键词"]
         }}
     ]
 }}

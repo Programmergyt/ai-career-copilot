@@ -11,7 +11,7 @@ from typing import Any
 from langgraph.graph import StateGraph, END
 
 from workflow.state import CopilotState
-from workflow.trace import summarize_user_message
+from workflow.rationales import summarize_user_message
 from agents.planner import planner_node_async
 from agents.jd_agent import jd_node_async
 from agents.profile_agent import profile_node_async
@@ -71,68 +71,75 @@ def _route_after_render(state: CopilotState) -> str:
 
 
 def _respond(state: CopilotState) -> dict[str, Any]:
-    """最终响应节点 — 基于本轮运行轨迹生成稳定的过程记录。"""
-    return {"reply_message": _build_trace_reply(state)}
+    """最终响应节点 — 将 agent rationale 汇总为用户可读 Markdown。"""
+    return {"reply_message": _build_markdown_reply(state)}
 
 
-def _format_artifacts(artifacts: dict[str, Any]) -> str:
-    if not artifacts:
-        return ""
-    parts = []
-    for key, value in artifacts.items():
-        if value in (None, "", [], {}):
-            continue
-        if isinstance(value, list):
-            value = ", ".join(str(item) for item in value)
-        parts.append(f"{key}={value}")
-    return f"（{'; '.join(parts)}）" if parts else ""
+def _build_markdown_reply(state: CopilotState) -> str:
+    lines = ["已完成这轮处理。"]
 
+    if state.user_message or state.current_intent:
+        lines.extend([
+            "",
+            "### 我理解的需求",
+            f"- 你的输入：{summarize_user_message(state.user_message) or '空'}",
+            f"- 我把它识别为：{state.current_intent or '未识别'}",
+        ])
 
-def _build_trace_reply(state: CopilotState) -> str:
-    plan_text = " -> ".join(state.execution_plan) if state.execution_plan else "无后续 Agent"
-    lines = [
-        "已完成本轮处理。",
-        "",
-        "**执行过程**",
-        f"1. 用户输入：{summarize_user_message(state.user_message) or '空'}",
-        f"2. 意图识别：{state.current_intent or '未识别'}",
-        f"3. 执行计划：{plan_text}",
-        "4. 节点产物：",
-    ]
+    if state.current_intent == "ask_question" and state.agent_reply_message:
+        lines.extend(["", "### 回答", state.agent_reply_message])
 
-    if state.workflow_trace:
-        for item in state.workflow_trace:
-            artifacts = _format_artifacts(item.artifacts)
-            status = item.status
-            line = f"   - {item.node} [{status}]：{item.output_summary}{artifacts}"
-            if item.error:
-                line += f"；错误：{item.error}"
-            lines.append(line)
+    lines.extend(["", "### 我为什么这样处理"])
+    if state.section_rationales:
+        for item in state.section_rationales:
+            prefix = f"**{item.section or item.agent or '处理说明'}**"
+            text = item.decision or "完成相关处理"
+            if item.reason:
+                text = f"{text}。{item.reason}"
+            if item.status == "failed":
+                text = f"{text}（处理失败）"
+            elif item.status == "skipped":
+                text = f"{text}（已跳过）"
+            lines.append(f"- {prefix}：{text}")
+            if item.evidence:
+                evidence = "；".join(str(value) for value in item.evidence[:3] if value)
+                if evidence:
+                    lines.append(f"  依据：{evidence}")
     else:
-        lines.append("   - respond [success]：没有可展示的节点记录。")
+        lines.append("- 这轮没有需要展开解释的生成决策。")
 
     final_result = _final_result_summary(state)
-    lines.extend(["", "**最终结果**", final_result])
+    lines.extend(["", "### 处理结果", final_result])
     return "\n".join(lines)
 
 
 def _final_result_summary(state: CopilotState) -> str:
-    if state.workflow_trace:
-        failed = [item for item in state.workflow_trace if item.status == "failed"]
-        if failed:
-            return failed[-1].output_summary or "本轮处理未完成，请检查失败节点。"
+    failed = [item for item in state.section_rationales if item.status == "failed"]
+    if failed:
+        return failed[-1].reason or "本轮处理未完成，请检查失败节点。"
 
-        if state.current_intent == "ask_question":
-            for item in reversed(state.workflow_trace):
-                if item.node == "question_agent":
-                    return item.output_summary or "问题已处理完成。"
-
-        non_planner_items = [item for item in state.workflow_trace if item.node != "planner"]
-        if non_planner_items:
-            return non_planner_items[-1].output_summary or "本轮处理已完成。"
+    if state.current_intent == "ask_question" and state.agent_reply_message:
+        return "问题已回答。"
 
     if state.current_intent == "export":
         return "导出功能将在后续版本中支持。"
+
+    parts: list[str] = []
+    if state.job and state.job.title:
+        parts.append(f"目标岗位：{state.job.title}")
+    if state.resume_content_json:
+        parts.append(f"简历内容 v{state.resume_content_json.meta.version} 已准备")
+    if state.resume_html.html:
+        parts.append(f"简历预览 v{state.resume_html.version} 已渲染")
+    if state.gaps:
+        parts.append(f"发现 {len(state.gaps)} 项能力缺口")
+    if state.questions_to_ask:
+        parts.append(f"整理 {len(state.questions_to_ask)} 个待补充问题")
+    if state.interview_qa:
+        parts.append(f"生成 {len(state.interview_qa)} 条面试问答")
+
+    if parts:
+        return "；".join(parts) + "。"
     return "本轮处理已完成。"
 
 

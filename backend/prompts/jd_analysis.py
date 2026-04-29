@@ -10,6 +10,7 @@ JD_ANALYSIS_PROMPT = """你是一个专业的岗位需求分析专家。请仔�
 - 不要输出 Markdown、代码块、注释或额外说明
 - 所有 key 必须使用双引号
 - 所有字符串中的双引号必须转义
+- section_rationales 用于给用户展示简要决策依据，不要输出内部逐步推理；每条 1 句话即可
 
 返回格式如下：
 {{
@@ -23,7 +24,15 @@ JD_ANALYSIS_PROMPT = """你是一个专业的岗位需求分析专家。请仔�
     "education_requirement": "学历要求",
     "experience_requirement": "经验要求",
     "implicit_preferences": ["隐含偏好1"],
-    "bonus_items": ["加分项1"]
+    "bonus_items": ["加分项1"],
+    "section_rationales": [
+        {{
+            "section": "岗位分析",
+            "decision": "提取岗位名称、技术栈、职责和加分项",
+            "reason": "说明这些信息会如何影响后续的简历匹配、内容排序或面试准备",
+            "evidence": ["JD 中的关键词或短句"]
+        }}
+    ]
 }}
 
 注意：

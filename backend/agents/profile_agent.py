@@ -13,7 +13,7 @@ from prompts.profile_extraction import PROFILE_EXTRACTION_PROMPT
 from workflow.state import (
     CopilotState, CandidateProfile, ProfileBasic, Material, Fact,
 )
-from workflow.trace import append_trace, summarize_user_message
+from workflow.rationales import append_section_rationales, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -41,13 +41,14 @@ async def profile_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("Profile Agent failed: %s", exc)
         return {
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="profile_agent",
+                agent="profile_agent",
                 status="failed",
-                input_summary=f"解析候选人材料：{summarize_user_message(material_text)}",
-                output_summary="候选人画像解析失败：模型输出格式异常，请重试。",
-                error=str(exc),
+                fallback_section="候选人画像",
+                fallback_decision="暂时无法解析候选人材料",
+                fallback_reason="模型返回的画像提取结果不符合 JSON 约束，请重试或补充更清晰的材料。",
+                fallback_evidence=[summarize_user_message(material_text)],
             ),
         }
 
@@ -126,16 +127,14 @@ async def profile_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "candidate_profile": profile,
         "meta": meta,
-        "workflow_trace": append_trace(
+        "section_rationales": append_section_rationales(
             state,
-            node="profile_agent",
-            input_summary=f"解析候选人材料：{summarize_user_message(material_text)}",
-            output_summary=f"已更新候选人画像：{new_basic.name or '未命名候选人'}，共 {len(existing_facts)} 条事实记录。",
-            artifacts={
-                "candidate_name": new_basic.name,
-                "material_count": len(materials),
-                "fact_count": len(existing_facts),
-            },
+            agent="profile_agent",
+            rationales=parsed.section_rationales,
+            fallback_section="候选人画像",
+            fallback_decision=f"整理 {new_basic.name or '候选人'} 的材料并沉淀为 {len(existing_facts)} 条事实",
+            fallback_reason="这些事实会作为后续简历生成、能力缺口分析和面试问答的依据。",
+            fallback_evidence=[fact.type for fact in existing_facts[:5]],
         ),
     }
 

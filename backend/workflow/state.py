@@ -158,14 +158,13 @@ class ConversationEvent(BaseModel):
     status: str = "success"
 
 
-class WorkflowTraceItem(BaseModel):
-    node: str
+class SectionRationale(BaseModel):
+    agent: str = ""
+    section: str = ""
+    decision: str = ""
+    reason: str = ""
+    evidence: list[str] = Field(default_factory=list)
     status: str = "success"  # success / skipped / failed
-    input_summary: str = ""
-    output_summary: str = ""
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-    error: str = ""
-    created_at: str = ""
 
 
 class DirtyFlags(BaseModel):
@@ -234,5 +233,6 @@ class CopilotState(BaseModel):
     current_intent: str = ""
     execution_plan: list[str] = Field(default_factory=list)
     reply_message: str = ""
+    agent_reply_message: str = ""
     triggered_agents: list[str] = Field(default_factory=list)
-    workflow_trace: list[WorkflowTraceItem] = Field(default_factory=list)
+    section_rationales: list[SectionRationale] = Field(default_factory=list)

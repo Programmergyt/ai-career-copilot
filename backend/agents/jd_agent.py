@@ -11,7 +11,7 @@ from agents.json_contracts import JDAnalysisOutput
 from models.llm import get_llm, ainvoke_json_with_schema
 from prompts.jd_analysis import JD_ANALYSIS_PROMPT
 from workflow.state import CopilotState, Job
-from workflow.trace import append_trace, summarize_user_message
+from workflow.rationales import append_section_rationales, summarize_user_message
 from log import get_logger
 
 logger = get_logger("agent")
@@ -30,13 +30,14 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
     except RuntimeError as exc:
         logger.error("JD Agent failed: %s", exc)
         return {
-            "workflow_trace": append_trace(
+            "section_rationales": append_section_rationales(
                 state,
-                node="jd_agent",
+                agent="jd_agent",
                 status="failed",
-                input_summary=f"解析岗位文本：{summarize_user_message(jd_text)}",
-                output_summary="岗位解析失败：模型输出格式异常，请重试。",
-                error=str(exc),
+                fallback_section="岗位分析",
+                fallback_decision="暂时无法解析岗位描述",
+                fallback_reason="模型返回的岗位分析结果不符合 JSON 约束，请重试或补充更清晰的 JD。",
+                fallback_evidence=[summarize_user_message(jd_text)],
             ),
         }
 
@@ -78,19 +79,14 @@ async def jd_node_async(state: CopilotState) -> dict[str, Any]:
     return {
         "job": job,
         "meta": meta,
-        "workflow_trace": append_trace(
+        "section_rationales": append_section_rationales(
             state,
-            node="jd_agent",
-            input_summary=f"解析岗位文本：{summarize_user_message(jd_text)}",
-            output_summary=f"已解析岗位：{job.title}（{job.industry}）。",
-            artifacts={
-                "job_title": job.title,
-                "industry": job.industry,
-                "tech_stack_count": len(job.tech_stack),
-                "hard_skill_count": len(job.hard_skills),
-                "responsibility_count": len(job.responsibilities),
-                "version": job.version,
-            },
+            agent="jd_agent",
+            rationales=parsed.section_rationales,
+            fallback_section="岗位分析",
+            fallback_decision=f"提取岗位 {job.title or '未命名岗位'} 的关键要求",
+            fallback_reason="岗位名称、技术栈、职责和加分项会决定后续简历内容的优先级和面试准备方向。",
+            fallback_evidence=[*(job.tech_stack[:3]), *(job.keywords[:2])],
         ),
     }
 
