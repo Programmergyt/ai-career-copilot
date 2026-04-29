@@ -17,6 +17,7 @@ from config_loader import (
     get_redis_config,
     get_mysql_config,
     get_fastapi_config,
+    get_memory_config,
     get_testing_config,
     should_run_real_llm_integration_tests,
 )
@@ -170,6 +171,23 @@ class TestFastAPIConfig:
         cfg = get_fastapi_config()
         assert cfg["port"] == 8000
         assert cfg["workers"] == 2
+
+
+class TestMemoryConfig:
+
+    def test_memory_config_structure(self):
+        cfg = get_memory_config()
+        assert "enabled" in cfg
+        assert "redis_ttl" in cfg
+        assert "recall_top_k" in cfg
+        assert "chroma_persist_directory" in cfg
+        assert "chroma_collection" in cfg
+
+    def test_memory_config_values(self):
+        cfg = get_memory_config()
+        assert cfg["enabled"] is True
+        assert cfg["recall_top_k"] == 8
+        assert cfg["chroma_collection"] == "career_memory"
 
 
 class TestTestingConfig:

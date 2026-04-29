@@ -14,6 +14,7 @@ from dotenv import dotenv_values
 _config: dict | None = None
 _dotenv: dict | None = None
 _BACKEND_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _BACKEND_DIR.parent
 
 
 def _resolve_env_override(env_var_name: str, default: str = "") -> str:
@@ -31,6 +32,14 @@ def _resolve_int_override(env_var_name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def _resolve_bool_override(env_var_name: str, default: bool) -> bool:
+    """解析布尔环境变量覆盖。"""
+    raw = _resolve_env_override(env_var_name, "")
+    if raw == "":
+        return default
+    return str(raw).lower() in {"1", "true", "yes", "on"}
 
 
 def _get_dotenv() -> dict:
@@ -179,6 +188,30 @@ def get_fastapi_config() -> dict:
 def get_rag_config() -> dict:
     """返回 RAG 参数（chunk_size, chunk_overlap, search_top_k, rerank_top_n）。"""
     return get_config().get("rag", {})
+
+
+def get_memory_config() -> dict:
+    """返回 Memory 配置。"""
+    cfg = get_config().get("memory", {})
+    persist_dir = _resolve_env_override(
+        "MEMORY_CHROMA_PERSIST_DIRECTORY",
+        cfg.get("chroma_persist_directory", "data/chroma"),
+    )
+    persist_path = Path(persist_dir)
+    if not persist_path.is_absolute():
+        persist_path = _PROJECT_ROOT / persist_path
+
+    return {
+        "enabled": _resolve_bool_override("MEMORY_ENABLED", bool(cfg.get("enabled", True))),
+        "redis_ttl": _resolve_int_override("MEMORY_REDIS_TTL", int(cfg.get("redis_ttl", 60 * 60 * 24))),
+        "recall_top_k": _resolve_int_override("MEMORY_RECALL_TOP_K", int(cfg.get("recall_top_k", 8))),
+        "recall_cache_ttl": _resolve_int_override("MEMORY_RECALL_CACHE_TTL", int(cfg.get("recall_cache_ttl", 300))),
+        "chroma_persist_directory": str(persist_path),
+        "chroma_collection": _resolve_env_override(
+            "MEMORY_CHROMA_COLLECTION",
+            cfg.get("chroma_collection", "career_memory"),
+        ),
+    }
 
 
 def get_vector_store_config() -> dict:

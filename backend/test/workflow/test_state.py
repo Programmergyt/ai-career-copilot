@@ -25,6 +25,8 @@ class TestCopilotStateDefaults:
         assert state.user_message == ""
         assert state.execution_plan == []
         assert state.section_rationales == []
+        assert state.memory_context == ""
+        assert state.retrieved_memories == []
 
     def test_state_with_session_id(self):
         state = CopilotState(session_id="test_session_001")

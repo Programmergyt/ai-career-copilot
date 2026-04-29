@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from api.chat_input import prepare_chat_input
 from workflow.graph import compile_graph
 from workflow.state import CopilotState
+from memory.service import get_memory_service
 from storage.redis_client import get_redis_client, RedisSessionStore
 from storage.mysql_client import get_mysql_pool, MySQLStore
 from log import get_logger
@@ -75,14 +76,28 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
     saved_state = await _aload_state(store)
 
     if saved_state:
-        state = CopilotState.model_validate(saved_state)
+        previous_state = CopilotState.model_validate(saved_state)
     else:
-        state = CopilotState(session_id=session_id)
+        previous_state = CopilotState(session_id=session_id)
+    state = previous_state.model_copy(deep=True)
 
     # 注入用户输入
     prepared_input = prepare_chat_input(req.message, req.attachments)
     state.user_message = prepared_input.user_message
     state.user_attachments = prepared_input.user_attachments
+
+    # 记忆模块在 workflow 外部执行检索，并只向 state 注入运行时上下文。
+    try:
+        memory_service = await get_memory_service()
+        memory_bundle = await memory_service.recall(
+            session_id=session_id,
+            message=prepared_input.user_message,
+            state=previous_state,
+        )
+        state.memory_context = memory_service.format_context(memory_bundle)
+        state.retrieved_memories = [hit.model_dump() for hit in memory_bundle.hits]
+    except Exception as e:
+        logger.warning("Memory recall skipped: %s", e)
 
     # 执行 workflow graph，加上config指定langsmith的run_name，方便在LangSmith上查看每次API调用的执行详情
     graph = _get_graph()
@@ -98,11 +113,18 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
     # 持久化到 Redis
     persist_data = final_state.model_dump(exclude={"user_message", "user_attachments", "current_intent",
                                                      "execution_plan", "reply_message", "agent_reply_message",
-                                                     "triggered_agents", "section_rationales"})
+                                                     "triggered_agents", "section_rationales", "memory_context",
+                                                     "retrieved_memories"})
     await _asave_state(store, persist_data)
 
     # 后台持久化到 MySQL，避免同步阻塞请求主链。
     background_tasks.add_task(_persist_to_mysql_safe, final_state)
+    background_tasks.add_task(
+        _persist_to_memory_safe,
+        previous_state,
+        final_state,
+        prepared_input.user_message,
+    )
 
     return ChatResponse(
         session_id=session_id,
@@ -168,3 +190,19 @@ async def _persist_to_mysql_safe(state: CopilotState) -> None:
         await _persist_to_mysql(state)
     except Exception as e:
         logger.error("MySQL persistence failed: %s", e, exc_info=True)
+
+
+async def _persist_to_memory_safe(
+    old_state: CopilotState | None,
+    final_state: CopilotState,
+    user_message: str,
+) -> None:
+    try:
+        memory_service = await get_memory_service()
+        await memory_service.observe_and_write(
+            old_state=old_state,
+            final_state=final_state,
+            user_message=user_message,
+        )
+    except Exception as e:
+        logger.error("Memory persistence failed: %s", e, exc_info=True)

@@ -236,3 +236,5 @@ class CopilotState(BaseModel):
     agent_reply_message: str = ""
     triggered_agents: list[str] = Field(default_factory=list)
     section_rationales: list[SectionRationale] = Field(default_factory=list)
+    memory_context: str = ""
+    retrieved_memories: list[dict[str, Any]] = Field(default_factory=list)

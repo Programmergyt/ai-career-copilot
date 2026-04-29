@@ -24,6 +24,14 @@ rerank:
   api_key_env: "DASHSCOPE_API_KEY"
   top_n: 5
 
+memory:
+  enabled: true
+  redis_ttl: 86400
+  recall_top_k: 8
+  recall_cache_ttl: 300
+  chroma_persist_directory: "data/chroma"
+  chroma_collection: "career_memory"
+
 redis:
   host_from: "server"          # 复用 server.host
   port: 6379

@@ -70,7 +70,14 @@ class RenderRequest(BaseModel):
 @router.post("/render")
 async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
     """渲染指令接口。"""
-    from api.chat import _ainvoke_graph, _aload_state, _asave_state, _get_graph, _persist_to_mysql_safe
+    from api.chat import (
+        _ainvoke_graph,
+        _aload_state,
+        _asave_state,
+        _get_graph,
+        _persist_to_memory_safe,
+        _persist_to_mysql_safe,
+    )
 
     client = await get_redis_client()
     store = RedisSessionStore(req.session_id, client)
@@ -78,7 +85,8 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
     if not saved:
         raise HTTPException(status_code=404, detail="会话不存在")
 
-    state = CopilotState.model_validate(saved)
+    previous_state = CopilotState.model_validate(saved)
+    state = previous_state.model_copy(deep=True)
     state.user_message = req.render_instruction
     state.current_intent = "render_edit"
     state.execution_plan = ["render_agent"]
@@ -94,10 +102,12 @@ async def render_resume(req: RenderRequest, background_tasks: BackgroundTasks):
 
     persist_data = final.model_dump(exclude={"user_message", "user_attachments", "current_intent",
                                               "execution_plan", "reply_message", "agent_reply_message",
-                                              "triggered_agents", "section_rationales"})
+                                              "triggered_agents", "section_rationales", "memory_context",
+                                              "retrieved_memories"})
     await _asave_state(store, persist_data)
 
     background_tasks.add_task(_persist_to_mysql_safe, final)
+    background_tasks.add_task(_persist_to_memory_safe, previous_state, final, req.render_instruction)
 
     return {
         "render_config": final.render_config.model_dump(),

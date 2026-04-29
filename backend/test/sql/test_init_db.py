@@ -41,6 +41,9 @@ EXPECTED_TABLES = [
     "resume_htmls",
     "interview_qas",
     "conversation_events",
+    "memory_records",
+    "memory_events",
+    "memory_summaries",
 ]
 
 
