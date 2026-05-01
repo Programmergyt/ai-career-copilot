@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html as html_lib
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,6 +15,16 @@ if TYPE_CHECKING:
 logger = get_logger("app")
 
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
+
+
+def _render_content_lines(text: str) -> str:
+    """Render non-empty content lines as a compact bullet list."""
+    normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.strip() for line in re.split(r"\n+", normalized) if line.strip()]
+    if not lines:
+        return ""
+    items_html = "\n".join(f"<li>{html_lib.escape(line)}</li>" for line in lines)
+    return f'<ul class="item-content-list">\n{items_html}\n</ul>'
 
 
 def render_resume_html(content: "ResumeContent", config: "RenderConfig") -> str:
@@ -63,11 +75,10 @@ def _build_template_variables(content: "ResumeContent", config: "RenderConfig") 
     def _render_items(items, section_class: str) -> str:
         parts = []
         for item in items:
-            # 处理 content 中的换行
-            formatted_content = item.content.replace("\n", "<br>")
+            formatted_content = _render_content_lines(item.content)
             parts.append(
                 f'<div class="item {section_class}-item">'
-                f'<h3 class="item-title">{item.title}</h3>'
+                f'<h3 class="item-title">{html_lib.escape(item.title)}</h3>'
                 f'<div class="item-content">{formatted_content}</div>'
                 f'</div>'
             )

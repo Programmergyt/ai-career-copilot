@@ -16,3 +16,5 @@ node_modules/
 
 docs/private-deployment.md
 /docs/marketing/*.md
+
+start-dev.ps1

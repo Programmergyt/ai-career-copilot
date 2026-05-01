@@ -97,6 +97,24 @@ class TestRenderResumeHTML:
         html = render_resume_html(sample_resume_content, default_render_config)
         assert "启明星创新奖学金" in html
 
+    def test_item_content_renders_non_empty_lines_without_blank_rows(
+        self,
+        sample_resume_content,
+        default_render_config,
+    ):
+        sample_resume_content.projects[0].content = (
+            "基于 LangGraph 负责 RAG 工作流编排。\n\n"
+            "采用混合检索方案将 Recall@5 提升至 0.90+。"
+        )
+
+        html = render_resume_html(sample_resume_content, default_render_config)
+
+        assert '<ul class="item-content-list">' in html
+        assert "<li>基于 LangGraph 负责 RAG 工作流编排。</li>" in html
+        assert "<li>采用混合检索方案将 Recall@5 提升至 0.90+。</li>" in html
+        assert "<br><br>" not in html
+        assert "<li></li>" not in html
+
 
 class TestBuildTemplateVariables:
 

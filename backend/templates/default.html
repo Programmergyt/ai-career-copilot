@@ -107,7 +107,21 @@
 
         .item-content {
             color: #444;
-            white-space: pre-wrap;
+        }
+
+        .item-content-list {
+            margin: 0;
+            padding-left: 1.2em;
+            list-style: disc;
+        }
+
+        .item-content-list li {
+            margin: 0;
+            padding-left: 2px;
+        }
+
+        .item-content-list li::marker {
+            color: #333;
         }
 
         /* Double column layout */
@@ -128,6 +142,10 @@
         }
 
         html.dark .item-content {
+            color: #ccc;
+        }
+
+        html.dark .item-content-list li::marker {
             color: #ccc;
         }
 

@@ -143,7 +143,7 @@ class PromptRouterLLM:
                     {
                         "id": "intern_1",
                         "title": "远望工业智能 — RAG 诊断平台",
-                        "content": "负责 RAG 检索与重排链路，提升诊断准确率。",
+                        "content": "基于工业故障知识库负责 RAG 检索与重排链路，融合关键词检索、向量召回和 Cross-Encoder 重排。\n优化诊断问答的检索覆盖率与答案相关性，支撑工业故障知识检索落地。\n沉淀可复用的检索评估流程，为后续召回和重排策略迭代提供依据。",
                         "source_refs": [],
                         "updated_at": "",
                     }
@@ -152,7 +152,7 @@ class PromptRouterLLM:
                     {
                         "id": "proj_1",
                         "title": "AI Career Copilot",
-                        "content": "基于 LangGraph 的多 Agent 简历系统。",
+                        "content": "基于 LangGraph 设计多 Agent 求职辅助系统，串联 JD 解析、简历生成、渲染与面试问答流程。\n实现内容生成与渲染配置分离，使简历修改后可自动触发 HTML 预览更新。\n交付可端到端运行的职业助手原型，提升简历内容生成与岗位匹配分析效率。",
                         "source_refs": [],
                         "updated_at": "",
                     }
