@@ -80,7 +80,7 @@ class MemoryService:
             ttl=self._recall_cache_ttl,
         )
         return bundle
-
+    
     def format_context(self, bundle: MemoryBundle) -> str:
         return self._adapter.format_context(bundle)
 

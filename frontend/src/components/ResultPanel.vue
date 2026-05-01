@@ -39,6 +39,8 @@
         :resume-content="resumeContent"
         :render-config="renderConfig"
         :triggered-agents="triggeredAgents"
+        :llm-token-usage="llmTokenUsage"
+        :context-window="contextWindow"
       />
     </div>
   </div>
@@ -63,6 +65,8 @@ const props = defineProps({
   renderConfig: Object,
   interviewQa: Array,
   triggeredAgents: Array,
+  llmTokenUsage: Array,
+  contextWindow: Object,
 })
 
 const activeTab = ref('job')

@@ -105,6 +105,8 @@ def get_llm_config() -> dict:
         "deployment": cfg.get("deployment", ""),
         "model_kwargs": cfg.get("model_kwargs", {}),
         "timeout": cfg.get("timeout", None),
+        "context_window_tokens": cfg.get("context_window_tokens", 128 * 1024),
+        "token_counter": cfg.get("token_counter", {}),
     }
 
 
@@ -206,6 +208,26 @@ def get_memory_config() -> dict:
         "redis_ttl": _resolve_int_override("MEMORY_REDIS_TTL", int(cfg.get("redis_ttl", 60 * 60 * 24))),
         "recall_top_k": _resolve_int_override("MEMORY_RECALL_TOP_K", int(cfg.get("recall_top_k", 8))),
         "recall_cache_ttl": _resolve_int_override("MEMORY_RECALL_CACHE_TTL", int(cfg.get("recall_cache_ttl", 300))),
+        "context_window_tokens": _resolve_int_override(
+            "MEMORY_CONTEXT_WINDOW_TOKENS",
+            int(cfg.get("context_window_tokens", 128 * 1024)),
+        ),
+        "context_safety_margin_tokens": _resolve_int_override(
+            "MEMORY_CONTEXT_SAFETY_MARGIN_TOKENS",
+            int(cfg.get("context_safety_margin_tokens", 2048)),
+        ),
+        "memory_context_tokens": _resolve_int_override(
+            "MEMORY_CONTEXT_TOKENS",
+            int(cfg.get("memory_context_tokens", 24000)),
+        ),
+        "dynamic_summary_tokens": _resolve_int_override(
+            "MEMORY_DYNAMIC_SUMMARY_TOKENS",
+            int(cfg.get("dynamic_summary_tokens", 2000)),
+        ),
+        "min_retrieval_tokens": _resolve_int_override(
+            "MEMORY_MIN_RETRIEVAL_TOKENS",
+            int(cfg.get("min_retrieval_tokens", 2000)),
+        ),
         "chroma_persist_directory": str(persist_path),
         "chroma_collection": _resolve_env_override(
             "MEMORY_CHROMA_COLLECTION",

@@ -37,14 +37,27 @@ async def get_redis_client() -> aioredis.Redis:
 class RedisSessionStore:
     """会话级 Redis 异步状态管理。"""
 
-    def __init__(self, session_id: str, client: aioredis.Redis, ttl: int = _DEFAULT_TTL):
+    def __init__(
+        self,
+        session_id: str,
+        client: aioredis.Redis,
+        ttl: int = _DEFAULT_TTL,
+        checkpoint_namespace: str = "live",
+    ):
         self.session_id = session_id
         self.ttl = ttl
         self._client = client
+        self.checkpoint_namespace = checkpoint_namespace
 
     # ---- key helpers ----
     def _state_key(self) -> str:
         return f"session:{self.session_id}:state"
+
+    def _checkpoint_key(self, checkpoint_id: str) -> str:
+        return f"session:{self.session_id}:checkpoint:{self.checkpoint_namespace}:{checkpoint_id}"
+
+    def _checkpoint_index_key(self) -> str:
+        return f"session:{self.session_id}:checkpoint:{self.checkpoint_namespace}:index"
 
     def _events_key(self) -> str:
         return f"session:{self.session_id}:events"
@@ -65,8 +78,66 @@ class RedisSessionStore:
         return json.loads(data)
 
     async def delete_state(self) -> None:
-        await self._client.delete(self._state_key(), self._events_key())
+        checkpoint_keys = await self._client.lrange(self._checkpoint_index_key(), 0, -1)
+        await self._client.delete(
+            self._state_key(),
+            self._events_key(),
+            self._checkpoint_index_key(),
+            *checkpoint_keys,
+        )
         logger.info("Deleted state for session %s", self.session_id)
+
+    # ---- Redis Stack checkpoints ----
+    async def save_checkpoint(self, checkpoint_id: str, state: dict[str, Any], metadata: dict[str, Any] | None = None) -> None:
+        payload = {
+            "session_id": self.session_id,
+            "checkpoint_id": checkpoint_id,
+            "namespace": self.checkpoint_namespace,
+            "state": state,
+            "metadata": metadata or {},
+        }
+        key = self._checkpoint_key(checkpoint_id)
+        await self._json_set_with_fallback(key, payload)
+        await self._client.expire(key, self.ttl)
+        await self._client.lpush(self._checkpoint_index_key(), key)
+        await self._client.ltrim(self._checkpoint_index_key(), 0, 49)
+        await self._client.expire(self._checkpoint_index_key(), self.ttl)
+
+    async def load_checkpoint(self, checkpoint_id: str) -> dict[str, Any] | None:
+        key = self._checkpoint_key(checkpoint_id)
+        data = await self._json_get_with_fallback(key)
+        if not data:
+            return None
+        return data
+
+    async def latest_checkpoint(self) -> dict[str, Any] | None:
+        keys = await self._client.lrange(self._checkpoint_index_key(), 0, 0)
+        if not keys:
+            return None
+        return await self._json_get_with_fallback(keys[0])
+
+    async def _json_set_with_fallback(self, key: str, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(payload, ensure_ascii=False, default=str)
+        try:
+            await self._client.execute_command("JSON.SET", key, "$", encoded)
+        except Exception as exc:
+            logger.debug("RedisJSON unavailable for %s, falling back to string SET: %s", key, exc)
+            await self._client.set(key, encoded)
+
+    async def _json_get_with_fallback(self, key: str) -> dict[str, Any] | None:
+        try:
+            raw = await self._client.execute_command("JSON.GET", key, "$")
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return parsed[0]
+                return parsed
+        except Exception as exc:
+            logger.debug("RedisJSON unavailable for %s, falling back to GET: %s", key, exc)
+        raw = await self._client.get(key)
+        if raw is None:
+            return None
+        return json.loads(raw)
 
     # ---- events ----
     async def append_event(self, event: dict[str, Any]) -> None:

@@ -238,3 +238,5 @@ class CopilotState(BaseModel):
     section_rationales: list[SectionRationale] = Field(default_factory=list)
     memory_context: str = ""
     retrieved_memories: list[dict[str, Any]] = Field(default_factory=list)
+    context_window: dict[str, Any] = Field(default_factory=dict)
+    llm_token_usage: list[dict[str, Any]] = Field(default_factory=list)

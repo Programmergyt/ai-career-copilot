@@ -1,8 +1,10 @@
 """LLM 统一封装：基于 config.yaml 的 provider 动态创建 LangChain Chat Model。"""
 
 import asyncio
+import contextvars
 import json
 import os
+import uuid
 from typing import Any, TypeVar
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -10,10 +12,21 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
 from config_loader import get_config, get_llm_config, _resolve_api_key
+from models.token_counter import (
+    estimate_payload_tokens,
+    extract_usage_tokens,
+    get_context_window_tokens,
+    get_token_counter,
+)
 
 
 _llm_instance: Any | None = None
 _SchemaT = TypeVar("_SchemaT", bound=BaseModel)
+_llm_trace_session: contextvars.ContextVar[str | None] = contextvars.ContextVar("llm_trace_session", default=None)
+_llm_trace_records: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
+    "llm_trace_records",
+    default=None,
+)
 
 
 def _normalize_provider(provider: str) -> str:
@@ -218,6 +231,119 @@ async def _ainvoke_model(llm: Any, payload: Any) -> Any:
     return await asyncio.to_thread(llm.invoke, payload)
 
 
+def begin_llm_trace(session_id: str) -> tuple[contextvars.Token, contextvars.Token]:
+    """Start collecting token usage for one request."""
+    session_token = _llm_trace_session.set(session_id)
+    records_token = _llm_trace_records.set([])
+    return session_token, records_token
+
+
+def get_llm_trace_records() -> list[dict[str, Any]]:
+    records = _llm_trace_records.get()
+    return list(records or [])
+
+
+def end_llm_trace(tokens: tuple[contextvars.Token, contextvars.Token]) -> None:
+    session_token, records_token = tokens
+    _llm_trace_records.reset(records_token)
+    _llm_trace_session.reset(session_token)
+
+
+async def _ainvoke_model_tracked(
+    llm: Any,
+    payload: Any,
+    *,
+    agent_name: str,
+    attempt: int = 1,
+) -> Any:
+    safe_payload, prompt_truncated_tokens = _ensure_payload_budget(payload)
+    estimated_prompt_tokens = estimate_payload_tokens(safe_payload)
+    response = await _ainvoke_model(llm, safe_payload)
+    _record_llm_usage(
+        response=response,
+        agent_name=agent_name,
+        attempt=attempt,
+        estimated_prompt_tokens=estimated_prompt_tokens,
+        prompt_truncated_tokens=prompt_truncated_tokens,
+    )
+    return response
+
+
+def _ensure_payload_budget(payload: Any) -> tuple[Any, int]:
+    cfg = get_llm_config()
+    max_context_tokens = get_context_window_tokens()
+    budget = max(1024, max_context_tokens - int(cfg.get("max_tokens", 4096)) - 1024)
+    current = estimate_payload_tokens(payload)
+    if current <= budget:
+        return payload, 0
+
+    counter = get_token_counter()
+    if isinstance(payload, str):
+        summary = _build_truncation_summary(payload, current)
+        remaining = max(1, budget - counter.count_text(summary))
+        trimmed, removed = counter.truncate_text(payload, remaining, from_start=True)
+        return f"{summary}\n\n{trimmed}", removed
+
+    if isinstance(payload, list) and payload:
+        trimmed_payload = list(payload)
+        last = trimmed_payload[-1]
+        content = getattr(last, "content", None)
+        if isinstance(content, str):
+            summary = _build_truncation_summary(content, current)
+            remaining = max(1, budget - estimate_payload_tokens(trimmed_payload[:-1]) - counter.count_text(summary))
+            trimmed, removed = counter.truncate_text(content, remaining, from_start=True)
+            last = last.model_copy(update={"content": f"{summary}\n\n{trimmed}"}) if hasattr(last, "model_copy") else last
+            trimmed_payload[-1] = last
+            return trimmed_payload, removed
+
+    return payload, max(0, current - budget)
+
+
+def _build_truncation_summary(text: str, original_tokens: int) -> str:
+    counter = get_token_counter()
+    lead, _ = counter.truncate_text(text, 240)
+    return (
+        f"输入超过上下文窗口，已动态摘要并保留最近内容。"
+        f"原始估算 {original_tokens} tokens。被裁剪内容摘要：{lead}"
+    )
+
+
+def _record_llm_usage(
+    *,
+    response: Any,
+    agent_name: str,
+    attempt: int,
+    estimated_prompt_tokens: int,
+    prompt_truncated_tokens: int,
+) -> None:
+    cfg = get_llm_config()
+    usage = extract_usage_tokens(response)
+    prompt_tokens = int(usage.get("prompt_tokens") or 0)
+    completion_tokens = int(usage.get("completion_tokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or 0)
+    if total_tokens == 0:
+        prompt_tokens = prompt_tokens or estimated_prompt_tokens
+        total_tokens = prompt_tokens + completion_tokens
+
+    record = {
+        "call_id": f"llm_{uuid.uuid4().hex[:12]}",
+        "session_id": _llm_trace_session.get() or "",
+        "agent_name": agent_name,
+        "provider": cfg.get("provider", ""),
+        "model": cfg.get("model", ""),
+        "attempt": attempt,
+        "estimated_prompt_tokens": estimated_prompt_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "prompt_truncated_tokens": prompt_truncated_tokens,
+        "usage_source": usage.get("source", "estimate"),
+    }
+    records = _llm_trace_records.get()
+    if records is not None:
+        records.append(record)
+
+
 async def ainvoke_json_with_schema(
     llm: Any,
     prompt: str,
@@ -231,7 +357,12 @@ async def ainvoke_json_with_schema(
     last_error: Exception | None = None
 
     for attempt in range(2):
-        response = await _ainvoke_model(json_llm, request_prompt)
+        response = await _ainvoke_model_tracked(
+            json_llm,
+            request_prompt,
+            agent_name=agent_name,
+            attempt=attempt + 1,
+        )
         raw_output = _extract_text_content(response)
         try:
             parsed = parse_json_response(raw_output)
@@ -251,20 +382,30 @@ async def ainvoke_json_with_schema(
 def call_llm(system: str, user: str) -> str:
     """调用 LLM，返回文本结果。"""
     llm = get_llm()
-    response = llm.invoke([
+    payload = [
         SystemMessage(content=system),
         HumanMessage(content=user),
-    ])
+    ]
+    safe_payload, prompt_truncated_tokens = _ensure_payload_budget(payload)
+    estimated_prompt_tokens = estimate_payload_tokens(safe_payload)
+    response = llm.invoke(safe_payload)
+    _record_llm_usage(
+        response=response,
+        agent_name="Direct LLM",
+        attempt=1,
+        estimated_prompt_tokens=estimated_prompt_tokens,
+        prompt_truncated_tokens=prompt_truncated_tokens,
+    )
     return _extract_text_content(response)
 
 
 async def acall_llm(system: str, user: str) -> str:
     """异步调用 LLM，返回文本结果。"""
     llm = get_llm()
-    response = await _ainvoke_model(llm, [
+    response = await _ainvoke_model_tracked(llm, [
         SystemMessage(content=system),
         HumanMessage(content=user),
-    ])
+    ], agent_name="Direct LLM")
     return _extract_text_content(response)
 
 

@@ -12,7 +12,10 @@ from pydantic import BaseModel, Field
 from api.chat_input import prepare_chat_input
 from workflow.graph import compile_graph
 from workflow.state import CopilotState
+from memory.context_window import MemoryContextWindowManager
+from memory.contracts import MemoryBundle
 from memory.service import get_memory_service
+from models.llm import begin_llm_trace, end_llm_trace, get_llm_trace_records
 from storage.redis_client import get_redis_client, RedisSessionStore
 from storage.mysql_client import get_mysql_pool, MySQLStore
 from log import get_logger
@@ -62,6 +65,8 @@ class ChatResponse(BaseModel):
     resume_html: dict | None = None
     interview_qa: list[dict] = Field(default_factory=list)
     triggered_agents: list[str] = Field(default_factory=list)
+    llm_token_usage: list[dict] = Field(default_factory=list)
+    context_window: dict = Field(default_factory=dict)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -96,19 +101,65 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
         )
         state.memory_context = memory_service.format_context(memory_bundle)
         state.retrieved_memories = [hit.model_dump() for hit in memory_bundle.hits]
+        managed_context = MemoryContextWindowManager().manage(state, memory_bundle)
+        state = managed_context.state
+        state.context_window = managed_context.stats.model_dump()
+        if not managed_context.stats.within_budget:
+            raise HTTPException(
+                status_code=413,
+                detail="上下文超过 128K Token 窗口，动态摘要与裁剪后仍无法安全执行 LLM 调用。",
+            )
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         logger.warning("Memory recall skipped: %s", e)
+        managed_context = MemoryContextWindowManager().manage(state, MemoryBundle())
+        state = managed_context.state
+        state.context_window = managed_context.stats.model_dump()
+        if not managed_context.stats.within_budget:
+            raise HTTPException(
+                status_code=413,
+                detail="上下文超过 128K Token 窗口，裁剪后仍无法安全执行 LLM 调用。",
+            )
 
     # 执行 workflow graph，加上config指定langsmith的run_name，方便在LangSmith上查看每次API调用的执行详情
     graph = _get_graph()
+    checkpoint_id = f"ckpt_{uuid.uuid4().hex[:12]}"
+    await store.save_checkpoint(
+        checkpoint_id=f"{checkpoint_id}:before_graph",
+        state=state.model_dump(),
+        metadata={"stage": "before_graph", "context_window": state.context_window},
+    )
+    trace_tokens = begin_llm_trace(session_id)
     try:
         result = await _ainvoke_graph(graph, state.model_dump(), config={"run_name": f"API-Chat-Request: {session_id}"})
     except Exception as e:
         logger.error("Workflow execution failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"处理失败: {e}")
+    finally:
+        llm_token_usage = get_llm_trace_records()
+        end_llm_trace(trace_tokens)
 
     # 构建响应状态
     final_state = CopilotState.model_validate(result)
+    final_state.context_window = state.context_window
+    final_state.llm_token_usage = llm_token_usage
+    await store.append_event({
+        "event_type": "llm_token_usage",
+        "session_id": session_id,
+        "checkpoint_id": checkpoint_id,
+        "calls": llm_token_usage,
+        "context_window": final_state.context_window,
+    })
+    await store.save_checkpoint(
+        checkpoint_id=f"{checkpoint_id}:after_graph",
+        state=final_state.model_dump(),
+        metadata={
+            "stage": "after_graph",
+            "llm_call_count": len(llm_token_usage),
+            "total_tokens": sum(int(item.get("total_tokens") or 0) for item in llm_token_usage),
+        },
+    )
 
     # 持久化到 Redis
     persist_data = final_state.model_dump(exclude={"user_message", "user_attachments", "current_intent",
@@ -137,6 +188,8 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks) -> ChatRespo
         resume_html=final_state.resume_html.model_dump(),
         interview_qa=[qa.model_dump() for qa in final_state.interview_qa],
         triggered_agents=final_state.triggered_agents,
+        llm_token_usage=final_state.llm_token_usage,
+        context_window=final_state.context_window,
     )
 
 

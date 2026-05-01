@@ -49,6 +49,8 @@
         :render-config="renderConfig"
         :interview-qa="interviewQa"
         :triggered-agents="triggeredAgents"
+        :llm-token-usage="llmTokenUsage"
+        :context-window="contextWindow"
       />
     </div>
   </div>
@@ -74,6 +76,8 @@ const renderConfig = ref(null)
 const resumeHtml = ref(null)
 const interviewQa = ref([])
 const triggeredAgents = ref([])
+const llmTokenUsage = ref([])
+const contextWindow = ref({})
 
 function addMessage(role, content, attachments = []) {
   messages.value.push({
@@ -134,6 +138,8 @@ function applyResponse(data) {
   if (data.resume_html) resumeHtml.value = data.resume_html
   if (data.interview_qa) interviewQa.value = data.interview_qa
   if (data.triggered_agents) triggeredAgents.value = data.triggered_agents
+  if (data.llm_token_usage) llmTokenUsage.value = data.llm_token_usage
+  if (data.context_window) contextWindow.value = data.context_window
 }
 </script>
 

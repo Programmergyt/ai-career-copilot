@@ -10,6 +10,16 @@ llm:
   api_key_env: "DEEPSEEK_API_KEY"
   temperature: 0.3
   max_tokens: 8192
+  context_window_tokens: 131072
+  token_counter:
+    method: "auto"
+    chars_per_token: 3.5
+    message_overhead_tokens: 4
+    provider_overrides:
+      anthropic:
+        chars_per_token: 3.8
+      ollama:
+        chars_per_token: 3.6
 
 embedding:
   provider: "dashscope"
@@ -29,6 +39,11 @@ memory:
   redis_ttl: 86400
   recall_top_k: 8
   recall_cache_ttl: 300
+  context_window_tokens: 131072
+  context_safety_margin_tokens: 2048
+  memory_context_tokens: 24000
+  dynamic_summary_tokens: 2000
+  min_retrieval_tokens: 2000
   chroma_persist_directory: "data/chroma"
   chroma_collection: "career_memory"
 
