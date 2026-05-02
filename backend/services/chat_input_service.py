@@ -1,4 +1,4 @@
-"""Chat API 输入预处理。"""
+"""Chat input preparation service."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from tools.file_parser import parse_content_bytes, supported_upload_suffixes
@@ -18,6 +17,15 @@ _TEXT_SUFFIXES = {".txt", ".md"}
 _ALLOWED_SUFFIXES = supported_upload_suffixes()
 _MAX_PREVIEW_CHARS = 12000
 _BASE64_RE = re.compile(r"^[A-Za-z0-9+/=\r\n]+$")
+
+
+class ChatInputError(Exception):
+    """Raised when chat input or attachments cannot be normalized."""
+
+    def __init__(self, detail: str, status_code: int = 400) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
 
 
 class PreparedChatInput(BaseModel):
@@ -61,12 +69,12 @@ def _normalize_attachment(attachment: dict[str, Any], index: int) -> dict[str, A
         or ""
     ).strip()
     if not filename:
-        raise HTTPException(status_code=400, detail=f"第 {index} 个附件缺少文件名")
+        raise ChatInputError(f"第 {index} 个附件缺少文件名")
 
     suffix = Path(filename).suffix.lower()
     if suffix not in _ALLOWED_SUFFIXES:
         allowed = ", ".join(sorted(_ALLOWED_SUFFIXES))
-        raise HTTPException(status_code=400, detail=f"不支持的附件类型: {filename}。仅支持 {allowed}")
+        raise ChatInputError(f"不支持的附件类型: {filename}。仅支持 {allowed}")
 
     raw_content = attachment.get("content")
     if raw_content is None:
@@ -74,7 +82,7 @@ def _normalize_attachment(attachment: dict[str, Any], index: int) -> dict[str, A
     if raw_content is None:
         raw_content = attachment.get("text")
     if raw_content is None:
-        raise HTTPException(status_code=400, detail=f"附件 {filename} 缺少内容")
+        raise ChatInputError(f"附件 {filename} 缺少内容")
 
     return {
         **attachment,
@@ -102,15 +110,15 @@ def _parse_attachment(attachment: dict[str, Any]) -> str:
         if content_encoding == "auto" and suffix in _TEXT_SUFFIXES and isinstance(content, str):
             parsed_text = content
         else:
-            raise HTTPException(status_code=400, detail=f"附件 {filename} 解析失败: {exc}") from exc
-    except HTTPException:
+            raise ChatInputError(f"附件 {filename} 解析失败: {exc}") from exc
+    except ChatInputError:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"附件 {filename} 解析失败: {exc}") from exc
+        raise ChatInputError(f"附件 {filename} 解析失败: {exc}") from exc
 
     parsed_text = parsed_text.strip()
     if not parsed_text:
-        raise HTTPException(status_code=400, detail=f"附件 {filename} 未解析出有效文本")
+        raise ChatInputError(f"附件 {filename} 未解析出有效文本")
 
     if len(parsed_text) > _MAX_PREVIEW_CHARS:
         parsed_text = parsed_text[:_MAX_PREVIEW_CHARS].rstrip() + "\n...[内容过长，已截断]"
@@ -121,7 +129,7 @@ def _decode_attachment_bytes(content: Any, content_encoding: str, suffix: str) -
     if isinstance(content, bytes):
         return content
     if not isinstance(content, str):
-        raise HTTPException(status_code=400, detail="附件内容必须为字符串或字节")
+        raise ChatInputError("附件内容必须为字符串或字节")
 
     if content.startswith("data:") and ";base64," in content:
         _, _, content = content.partition(",")
@@ -133,17 +141,17 @@ def _decode_attachment_bytes(content: Any, content_encoding: str, suffix: str) -
             return decoded
         if suffix in _TEXT_SUFFIXES:
             return content.encode("utf-8")
-        raise HTTPException(status_code=400, detail="二进制附件默认需要使用 base64 编码传输")
+        raise ChatInputError("二进制附件默认需要使用 base64 编码传输")
 
     if content_encoding in {"text", "plain", "utf-8", "utf8"}:
         return content.encode("utf-8")
     if content_encoding in {"base64", "b64"}:
         decoded = _try_decode_base64(content)
         if decoded is None:
-            raise HTTPException(status_code=400, detail="附件内容不是合法的 base64 编码")
+            raise ChatInputError("附件内容不是合法的 base64 编码")
         return decoded
 
-    raise HTTPException(status_code=400, detail=f"不支持的附件编码方式: {content_encoding}")
+    raise ChatInputError(f"不支持的附件编码方式: {content_encoding}")
 
 
 def _try_decode_base64(content: str) -> bytes | None:

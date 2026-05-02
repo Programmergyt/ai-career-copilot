@@ -5,9 +5,8 @@ from __future__ import annotations
 import base64
 
 import pytest
-from fastapi import HTTPException
 
-from api.chat_input import prepare_chat_input
+from services.chat_input_service import ChatInputError, prepare_chat_input
 
 
 class TestPrepareChatInput:
@@ -57,14 +56,14 @@ class TestPrepareChatInput:
         assert prepared.user_attachments[0]["parsed_text"] == "test"
 
     def test_prepare_chat_input_rejects_unsupported_suffix(self):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ChatInputError) as exc_info:
             prepare_chat_input("test", [{"filename": "notes.xlsx", "content": "data", "encoding": "text"}])
 
         assert exc_info.value.status_code == 400
         assert "仅支持" in exc_info.value.detail
 
     def test_prepare_chat_input_requires_attachment_content(self):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ChatInputError) as exc_info:
             prepare_chat_input("test", [{"filename": "notes.md"}])
 
         assert exc_info.value.status_code == 400

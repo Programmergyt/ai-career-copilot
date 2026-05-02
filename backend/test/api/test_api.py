@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from services.session_service import SessionNotFoundError
 from workflow.state import CopilotState, Gap, InterviewQA, Job, Question
 
 
@@ -21,33 +22,26 @@ def client():
 
 
 def _patch_resume_state_store(monkeypatch, saved_state):
-    class DummyStore:
-        def __init__(self, session_id, client=None):
-            self.session_id = session_id
+    async def dummy_load_existing_state(session_id):
+        if not saved_state:
+            raise SessionNotFoundError("会话不存在")
+        return CopilotState.model_validate(saved_state)
 
-        async def load_state(self):
-            return saved_state
+    monkeypatch.setattr("api.resume.load_existing_state", dummy_load_existing_state)
 
-    async def dummy_get_redis_client():
-        return object()
+    async def dummy_render_resume_workflow(session_id, render_instruction):
+        raise SessionNotFoundError("会话不存在")
 
-    monkeypatch.setattr("api.resume.get_redis_client", dummy_get_redis_client)
-    monkeypatch.setattr("api.resume.RedisSessionStore", DummyStore)
+    monkeypatch.setattr("api.resume.render_resume_workflow", dummy_render_resume_workflow)
 
 
 def _patch_export_state_store(monkeypatch, saved_state):
-    class DummyStore:
-        def __init__(self, session_id, client=None):
-            self.session_id = session_id
+    async def dummy_load_existing_state(session_id):
+        if not saved_state:
+            raise SessionNotFoundError("会话不存在")
+        return CopilotState.model_validate(saved_state)
 
-        async def load_state(self):
-            return saved_state
-
-    async def dummy_get_redis_client():
-        return object()
-
-    monkeypatch.setattr("api.export.get_redis_client", dummy_get_redis_client)
-    monkeypatch.setattr("api.export.RedisSessionStore", DummyStore)
+    monkeypatch.setattr("api.export.load_existing_state", dummy_load_existing_state)
 
 
 class TestHealthEndpoint:
