@@ -21,6 +21,39 @@ from log import get_logger
 logger = get_logger("agent")
 
 
+_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+def _serialize_gaps_for_prompt(state: CopilotState) -> str:
+    """把 state.gaps 中未 resolved 的项序列化为 JSON 注入 prompt。
+
+    - 过滤掉 resolved=True 的 gap（已解决无需再驱动改写）
+    - 按 severity 从高到低稳定排序，便于模型优先回应高严重度项
+    - 仅暴露生成所需字段，不外泄内部追问/解决来源等元信息
+    - 至少包含 high-severity 与未 resolved 的项（验收口径）
+    """
+    if not state.gaps:
+        return "[]"
+
+    relevant = [gap for gap in state.gaps if not gap.resolved]
+    if not relevant:
+        return "[]"
+
+    relevant.sort(key=lambda gap: _SEVERITY_RANK.get(gap.severity, 99))
+
+    payload = [
+        {
+            "id": gap.id,
+            "type": gap.type,
+            "severity": gap.severity,
+            "description": gap.description,
+            "related_section_ids": list(gap.related_section_ids),
+        }
+        for gap in relevant
+    ]
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def _build_resume_from_parsed(parsed: ResumeGenerationOutput, state: CopilotState) -> ResumeContent:
     """从 LLM 返回的 JSON 构建 ResumeContent 对象。"""
     now = datetime.now(timezone.utc).isoformat()
@@ -89,12 +122,14 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
 
     intent = state.current_intent
     llm = get_llm()
+    gaps_json = _serialize_gaps_for_prompt(state)
 
     if intent == "content_edit" and state.resume_content_json:
         # 局部更新
         prompt = RESUME_SECTION_UPDATE_PROMPT.format(
             current_resume_json=state.resume_content_json.model_dump_json(indent=2),
             job_json=state.job.model_dump_json(indent=2) if state.job else "{}",
+            gaps_json=gaps_json,
             edit_instruction=state.user_message,
         )
     else:
@@ -109,6 +144,7 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
         prompt = RESUME_GENERATION_PROMPT.format(
             job_json=job_json,
             profile_json=profile_json,
+            gaps_json=gaps_json,
             edit_instruction=edit_instruction,
         )
 
@@ -129,8 +165,10 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
 
     resume_content = _build_resume_from_parsed(parsed, state)
 
-    logger.info("Resume content generated v%d, hash=%s",
-                resume_content.meta.version, resume_content.meta.content_hash)
+    gap_count_injected = sum(1 for gap in state.gaps if not gap.resolved)
+
+    logger.info("Resume content generated v%d, hash=%s, unresolved_gaps_injected=%d",
+                resume_content.meta.version, resume_content.meta.content_hash, gap_count_injected)
 
     meta = state.meta.model_copy(update={
         "active_resume_content_version": resume_content.meta.version,
@@ -157,6 +195,7 @@ async def content_node_async(state: CopilotState) -> dict[str, Any]:
                 "project_count": len(resume_content.projects),
                 "internship_count": len(resume_content.internships),
                 "content_hash": resume_content.meta.content_hash,
+                "gap_count_injected": gap_count_injected,
             },
         ),
     }

@@ -8,6 +8,9 @@ RESUME_GENERATION_PROMPT = """你是一个专业的简历内容生成专家。�
 候选人画像：
 {profile_json}
 
+岗位与候选人之间的对齐缺口（来自 Gap Analysis Agent，仅含未 resolved 项，按 severity 从高到低排序）：
+{gaps_json}
+
 {edit_instruction}
 
 机器协议：
@@ -81,6 +84,11 @@ RESUME_GENERATION_PROMPT = """你是一个专业的简历内容生成专家。�
 3. 项目和实习描述使用 STAR 格式，突出与目标岗位相关的技能
 4. 技能根据 JD 要求的优先级排序
 5. 即使部分字段为空，也必须返回合法 JSON 对象
+6. 若 gaps 列表非空，针对每个 gap 在 related_section_ids 对应 section（如 projects、internships、skills）中**显式响应**：
+   - missing_skill / low_relevance：在合适 section 中加入相关关键词与场景化描述（仅当用户已提供事实时才补充，不得捏造）
+   - missing_experience：在 summary 或 internships / projects 中说明用户已有的最接近经历
+   - no_quantification：将受影响 section 的描述改写为带量化数据（百分比、数量、时长）的形式，保持事实真实
+   - 若候选人画像中确实没有任何可用事实可对齐，则保持该 section 为空，不要造数据
 """
 
 RESUME_SECTION_UPDATE_PROMPT = """你是简历内容编辑专家。请根据用户的修改指令，只更新简历中受影响的部分。
@@ -90,6 +98,9 @@ RESUME_SECTION_UPDATE_PROMPT = """你是简历内容编辑专家。请根据用�
 
 目标岗位信息：
 {job_json}
+
+岗位与候选人之间的对齐缺口（来自 Gap Analysis Agent，仅含未 resolved 项，按 severity 从高到低排序）：
+{gaps_json}
 
 用户修改指令：
 {edit_instruction}
@@ -106,4 +117,5 @@ RESUME_SECTION_UPDATE_PROMPT = """你是简历内容编辑专家。请根据用�
 1. 不得捏造用户未提供的事实
 2. 保持未修改部分不变
 3. 即使指令不明确，也必须返回合法 JSON 对象
+4. 若 gaps 列表非空且修改指令未禁止，对 related_section_ids 对应 section 给出针对性回应（关键词、量化、最接近经历），但不能捏造事实
 """
